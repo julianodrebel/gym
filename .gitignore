@@ -1,0 +1,5 @@
+# Credenciais OAuth baixadas do Google Cloud — nunca commitar
+client_secret*.json
+
+node_modules
+.wrangler
