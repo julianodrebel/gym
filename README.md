@@ -8,7 +8,7 @@ The whole app is a single `index.html` file: no build step, no bundler, no serve
 
 - **Accounts** — sign up and sign in with email and password (Supabase Auth). Each user only sees their own data.
 - **Log workouts** — pick an exercise, date, sets, reps, weight (kg) and an optional note. The form is pre-filled with your last entry for that exercise.
-- **Custom exercises** — add your own exercises, optionally tagged with a muscle group.
+- **Custom exercises** — in the *Exercícios* tab, add your own exercises (optionally tagged with a muscle group), see the full list and edit the name or muscle group.
 - **History** — your latest 150 entries grouped by day, with the option to delete an entry.
 - **Progress** — per-exercise chart of the heaviest weight and the estimated one-rep max (Epley formula), plus a summary of your personal record, change since the first entry, and number of sessions.
 - **Light and dark mode** — follows your system preference.

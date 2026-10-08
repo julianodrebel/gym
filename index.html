@@ -40,22 +40,23 @@
   .topo small { color: var(--suave); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .topo button { padding: 8px 12px; }
 
-  nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 14px;
+  nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 14px;
         background: var(--card); border: 1px solid var(--borda); border-radius: var(--raio); padding: 5px; }
-  nav button { background: transparent; color: var(--suave); padding: 10px 4px; }
+  nav button { background: transparent; color: var(--suave); padding: 10px 2px; font-size: .85rem; }
   nav button[aria-selected="true"] { background: var(--destaque); color: #fff; }
 
-  details summary { cursor: pointer; color: var(--destaque-2); font-weight: 600; margin: 4px 0 10px; }
   #ultimo { font-size: .9rem; color: var(--destaque-2); min-height: 1.3em; margin: -4px 0 12px; }
 
   .dia h3 { font-size: .9rem; color: var(--suave); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; }
-  .dia ul { list-style: none; margin: 0; padding: 0; }
-  .dia li { display: flex; justify-content: space-between; align-items: center; gap: 10px;
-            padding: 10px 0; border-top: 1px solid var(--borda); }
-  .dia li:first-child { border-top: 0; }
-  .dia li span, .dia li small { display: block; color: var(--suave); font-size: .9rem; }
-  .apagar { background: transparent; color: var(--suave); font-size: 1.3rem; padding: 4px 10px; }
+  .lista ul { list-style: none; margin: 0; padding: 0; }
+  .lista li { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+              padding: 10px 0; border-top: 1px solid var(--borda); }
+  .lista li:first-child { border-top: 0; }
+  .lista li span, .lista li small { display: block; color: var(--suave); font-size: .9rem; }
+  .apagar, .editar { background: transparent; color: var(--suave); font-size: 1.3rem; padding: 4px 10px; }
   .apagar:hover { color: var(--erro); }
+  .editar { font-size: 1.1rem; }
+  .editar:hover { color: var(--destaque-2); }
   .vazio { color: var(--suave); text-align: center; margin: 20px 0; }
 
   .resumo { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 14px; }
@@ -109,6 +110,7 @@
       <button class="aba-botao" data-aba="registrar" aria-selected="true">Registrar</button>
       <button class="aba-botao" data-aba="historico" aria-selected="false">Histórico</button>
       <button class="aba-botao" data-aba="evolucao" aria-selected="false">Evolução</button>
+      <button class="aba-botao" data-aba="exercicios" aria-selected="false">Exercícios</button>
     </nav>
 
     <!-- Registrar -->
@@ -144,28 +146,6 @@
         </div>
         <button class="primario">Salvar registro</button>
       </form>
-
-      <div class="card">
-        <details>
-          <summary>+ Cadastrar novo exercício</summary>
-          <form id="form-exercicio">
-            <div class="campo">
-              <label for="novo-nome">Nome</label>
-              <input id="novo-nome" type="text" maxlength="80" placeholder="Ex.: Supino reto" required>
-            </div>
-            <div class="campo">
-              <label for="novo-grupo">Grupo muscular (opcional)</label>
-              <input id="novo-grupo" type="text" list="grupos" placeholder="Ex.: Peito">
-              <datalist id="grupos">
-                <option>Peito</option><option>Costas</option><option>Pernas</option>
-                <option>Ombros</option><option>Bíceps</option><option>Tríceps</option>
-                <option>Abdômen</option><option>Glúteos</option><option>Panturrilha</option>
-              </datalist>
-            </div>
-            <button class="primario">Adicionar exercício</button>
-          </form>
-        </details>
-      </div>
     </div>
 
     <!-- Histórico -->
@@ -183,6 +163,32 @@
         <div id="evo-resumo" class="resumo"></div>
         <div class="grafico-box"><canvas id="grafico"></canvas></div>
       </div>
+    </div>
+
+    <!-- Exercícios -->
+    <div id="aba-exercicios" class="aba" hidden>
+      <form id="form-exercicio" class="card">
+        <h2 id="titulo-exercicio">Novo exercício</h2>
+        <div class="campo">
+          <label for="novo-nome">Nome</label>
+          <input id="novo-nome" type="text" maxlength="80" placeholder="Ex.: Supino reto" required>
+        </div>
+        <div class="campo">
+          <label for="novo-grupo">Grupo muscular (opcional)</label>
+          <input id="novo-grupo" type="text" list="grupos" placeholder="Ex.: Peito">
+          <datalist id="grupos">
+            <option>Peito</option><option>Costas</option><option>Pernas</option>
+            <option>Ombros</option><option>Bíceps</option><option>Tríceps</option>
+            <option>Abdômen</option><option>Glúteos</option><option>Panturrilha</option>
+          </datalist>
+        </div>
+        <div class="linha">
+          <button id="cancelar-edicao" class="secundario" type="button" hidden>Cancelar</button>
+          <button id="salvar-exercicio" class="primario">Adicionar exercício</button>
+        </div>
+      </form>
+
+      <div id="lista-exercicios"></div>
     </div>
   </section>
 </main>
@@ -277,6 +283,7 @@
     usuarioAtual = session.user.id;
     $('#usuario').textContent = session.user.email;
     $('#data').value = hoje();
+    cancelarEdicao();
     abrirAba('registrar');
     await carregarExercicios();
     mostrarUltimo(Number($('#exercicio').value));
@@ -295,20 +302,72 @@
   }
 
   // ---------- exercícios ----------
+  let exercicios = [];
+  let editandoId = null;
+
   async function carregarExercicios() {
     const { data, error } = await supabase
       .from('exercicios')
       .select('id, nome, grupo_muscular')
       .order('nome');
     if (error) return aviso(error.message, true);
+    exercicios = data;
 
     const opcoes = data.map((e) =>
       `<option value="${e.id}">${esc(e.nome)}${e.grupo_muscular ? ' · ' + esc(e.grupo_muscular) : ''}</option>`
     ).join('');
-    $('#exercicio').innerHTML = opcoes || '<option value="">Cadastre um exercício abaixo ↓</option>';
-    $('#evo-exercicio').innerHTML = opcoes || '<option value="">Nenhum exercício cadastrado</option>';
-    if (!data.length) $('details').open = true;
+    // Recria as opções mantendo o exercício que já estava selecionado
+    for (const [seletor, vazio] of [
+      ['#exercicio', 'Cadastre um exercício na aba Exercícios'],
+      ['#evo-exercicio', 'Nenhum exercício cadastrado'],
+    ]) {
+      const select = $(seletor);
+      const anterior = select.value;
+      select.innerHTML = opcoes || `<option value="">${vazio}</option>`;
+      if (data.some((e) => String(e.id) === anterior)) select.value = anterior;
+    }
+
+    $('#lista-exercicios').innerHTML = data.length ? `
+      <div class="card lista">
+        <h2>Cadastrados (${data.length})</h2>
+        <ul>
+          ${data.map((e) => `
+            <li>
+              <div>
+                <strong>${esc(e.nome)}</strong>
+                ${e.grupo_muscular ? `<span>${esc(e.grupo_muscular)}</span>` : ''}
+              </div>
+              <button class="editar" data-id="${e.id}" aria-label="Editar ${esc(e.nome)}">✎</button>
+            </li>`).join('')}
+        </ul>
+      </div>`
+      : '<div class="card"><p class="vazio">Nenhum exercício cadastrado ainda.</p></div>';
   }
+
+  function cancelarEdicao() {
+    editandoId = null;
+    $('#form-exercicio').reset();
+    $('#titulo-exercicio').textContent = 'Novo exercício';
+    $('#salvar-exercicio').textContent = 'Adicionar exercício';
+    $('#cancelar-edicao').hidden = true;
+  }
+
+  $('#cancelar-edicao').addEventListener('click', cancelarEdicao);
+
+  $('#lista-exercicios').addEventListener('click', (e) => {
+    const botao = e.target.closest('.editar');
+    const exercicio = botao && exercicios.find((x) => String(x.id) === botao.dataset.id);
+    if (!exercicio) return;
+
+    editandoId = exercicio.id;
+    $('#novo-nome').value = exercicio.nome;
+    $('#novo-grupo').value = exercicio.grupo_muscular ?? '';
+    $('#titulo-exercicio').textContent = 'Editar exercício';
+    $('#salvar-exercicio').textContent = 'Salvar alterações';
+    $('#cancelar-edicao').hidden = false;
+    $('#form-exercicio').scrollIntoView({ behavior: 'smooth' });
+    $('#novo-nome').focus({ preventScroll: true });
+  });
 
   $('#form-exercicio').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -316,16 +375,18 @@
     const grupo_muscular = $('#novo-grupo').value.trim() || null;
     if (!nome) return;
 
-    const { data, error } = await supabase
-      .from('exercicios')
-      .insert({ nome, grupo_muscular })
-      .select()
-      .single();
+    const editando = editandoId !== null;
+    const consulta = editando
+      ? supabase.from('exercicios').update({ nome, grupo_muscular }).eq('id', editandoId)
+      : supabase.from('exercicios').insert({ nome, grupo_muscular });
+    const { data, error } = await consulta.select().single();
     if (error) {
       return aviso(error.code === '23505' ? 'Você já tem um exercício com esse nome.' : error.message, true);
     }
-    e.target.reset();
+    cancelarEdicao();
     await carregarExercicios();
+    if (editando) return aviso('Exercício atualizado.');
+
     $('#exercicio').value = data.id;
     mostrarUltimo(data.id);
     aviso('Exercício adicionado.');
@@ -404,7 +465,7 @@
     }
 
     lista.innerHTML = [...porDia].map(([dia, itens]) => `
-      <div class="card dia">
+      <div class="card dia lista">
         <h3>${fmtData(dia)}</h3>
         <ul>
           ${itens.map((r) => `
