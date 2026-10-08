@@ -33,6 +33,9 @@
   .secundario { background: transparent; color: var(--texto); border: 1px solid var(--borda); }
   .linha { display: flex; gap: 10px; }
   .linha > * { flex: 1; }
+  .ou { display: flex; align-items: center; gap: 10px; color: var(--suave); font-size: .85rem; margin: 14px 0; }
+  .ou::before, .ou::after { content: ""; flex: 1; border-top: 1px solid var(--borda); }
+  #entrar-google { width: 100%; }
   .topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   .topo small { color: var(--suave); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .topo button { padding: 8px 12px; }
@@ -87,6 +90,8 @@
         <button class="primario" value="entrar">Entrar</button>
         <button class="secundario" value="cadastrar">Criar conta</button>
       </div>
+      <div class="ou">ou</div>
+      <button id="entrar-google" class="secundario" type="button">Entrar com Google</button>
     </form>
   </section>
 
@@ -243,6 +248,15 @@
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) return aviso('Não foi possível entrar: ' + error.message, true);
     }
+  });
+
+  // Redireciona para o Google; na volta o supabase-js lê a sessão da URL e dispara onAuthStateChange
+  $('#entrar-google').addEventListener('click', async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: location.origin + location.pathname },
+    });
+    if (error) aviso('Não foi possível entrar com Google: ' + error.message, true);
   });
 
   $('#sair').addEventListener('click', () => supabase.auth.signOut());

@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "gym",
+  "compatibility_date": "2026-10-08",
+  // Site estático: só serve os arquivos da raiz (ver .assetsignore)
+  "assets": {
+    "directory": "."
+  },
+  // Necessário para `wrangler preview` (deploy dos branches que não são produção)
+  "previews": {}
+}
