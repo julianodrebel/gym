@@ -27,7 +27,13 @@
   input, select, textarea { width: 100%; padding: 11px 12px; border-radius: 10px;
           border: 1px solid var(--borda); background: var(--bg); color: var(--texto); }
   .campo { margin-bottom: 12px; }
-  .grade-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .series { list-style: none; margin: 0 0 10px; padding: 0; }
+  .serie, .series-cabecalho { display: grid; grid-template-columns: 2rem 1fr 1fr 2.5rem; gap: 8px; align-items: center; }
+  .serie { margin-bottom: 8px; }
+  .series-cabecalho { font-size: .85rem; color: var(--suave); margin-bottom: 4px; }
+  .serie .num { text-align: center; font-weight: 600; color: var(--suave); }
+  .serie .apagar:disabled { visibility: hidden; }
+  #add-serie { width: 100%; }
   button { cursor: pointer; border: 0; border-radius: 10px; padding: 12px 16px; font-weight: 600; }
   .primario { background: var(--destaque); color: #fff; width: 100%; }
   .secundario { background: transparent; color: var(--texto); border: 1px solid var(--borda); }
@@ -47,7 +53,7 @@
 
   #ultimo { font-size: .9rem; color: var(--destaque-2); min-height: 1.3em; margin: -4px 0 12px; }
 
-  .dia h3 { font-size: .9rem; color: var(--suave); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; }
+  .dia h3, .marco h3 { font-size: .9rem; color: var(--suave); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; }
   .lista ul { list-style: none; margin: 0; padding: 0; }
   .lista li { display: flex; justify-content: space-between; align-items: center; gap: 10px;
               padding: 10px 0; border-top: 1px solid var(--borda); }
@@ -64,6 +70,15 @@
   .resumo b { display: block; font-size: 1.2rem; }
   .resumo span { font-size: .8rem; color: var(--suave); }
   .grafico-box { position: relative; height: 290px; }
+  .alternar { display: flex; gap: 6px; margin-bottom: 10px; }
+  .alternar button { flex: 1; padding: 8px; background: transparent; color: var(--suave); border: 1px solid var(--borda); }
+  .alternar button[aria-pressed="true"] { background: var(--destaque-2); color: #fff; border-color: var(--destaque-2); }
+  .marco + .marco { margin-top: 14px; }
+  .marco ul { list-style: none; margin: 0; padding: 0; }
+  .marco li { padding: 3px 0; }
+  .sobe { color: var(--ok); }
+  .desce { color: var(--erro); }
+  .neutro { color: var(--suave); }
 
   #aviso { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 150%);
            background: var(--ok); color: #fff; padding: 12px 18px; border-radius: 10px;
@@ -126,19 +141,12 @@
           <label for="data">Data</label>
           <input id="data" type="date" required>
         </div>
-        <div class="grade-3 campo">
-          <div>
-            <label for="series">Séries</label>
-            <input id="series" type="number" inputmode="numeric" min="1" value="3" required>
+        <div class="campo">
+          <div class="series-cabecalho" aria-hidden="true">
+            <span>Série</span><span>Carga (kg)</span><span>Repetições</span>
           </div>
-          <div>
-            <label for="repeticoes">Repetições</label>
-            <input id="repeticoes" type="number" inputmode="numeric" min="1" value="10" required>
-          </div>
-          <div>
-            <label for="carga">Carga (kg)</label>
-            <input id="carga" type="number" inputmode="decimal" min="0" step="0.5" required>
-          </div>
+          <ol id="lista-series" class="series"></ol>
+          <button id="add-serie" class="secundario" type="button">+ Adicionar série</button>
         </div>
         <div class="campo">
           <label for="observacao">Observação (opcional)</label>
@@ -161,8 +169,15 @@
           <select id="evo-exercicio"></select>
         </div>
         <div id="evo-resumo" class="resumo"></div>
-        <div class="grafico-box"><canvas id="grafico"></canvas></div>
+        <div id="evo-grafico" hidden>
+          <div class="alternar">
+            <button data-metrica="carga" aria-pressed="true">Carga por série</button>
+            <button data-metrica="repeticoes" aria-pressed="false">Repetições por série</button>
+          </div>
+          <div class="grafico-box"><canvas id="grafico"></canvas></div>
+        </div>
       </div>
+      <div id="evo-marcos" class="card" hidden></div>
     </div>
 
     <!-- Exercícios -->
@@ -229,7 +244,9 @@
     const [a, m, d] = iso.split('-');
     return `${d}/${m}/${a}`;
   }
-  const fmtKg = (n) => Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' kg';
+  const fmtNum = (n) => Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+  const fmtKg = (n) => fmtNum(n) + ' kg';
+  const fmtSerie = (s) => `${fmtKg(s.carga)} × ${s.repeticoes}`;
 
   let timerAviso;
   function aviso(msg, erro = false) {
@@ -393,6 +410,59 @@
   });
 
   // ---------- registros ----------
+  // Cada registro guarda as séries como lista: [{ carga, repeticoes }, ...]
+  const SERIES_PADRAO = Array.from({ length: 3 }, () => ({ carga: '', repeticoes: 10 }));
+
+  const linhaSerie = (s) => `
+    <li class="serie">
+      <span class="num"></span>
+      <input class="s-carga" type="number" inputmode="decimal" min="0" step="0.5" value="${esc(s.carga)}" required>
+      <input class="s-reps" type="number" inputmode="numeric" min="1" value="${esc(s.repeticoes)}" required>
+      <button class="apagar" type="button">×</button>
+    </li>`;
+
+  function preencherSeries(series) {
+    $('#lista-series').innerHTML = series.map(linhaSerie).join('');
+    numerarSeries();
+  }
+
+  // Renumera as linhas e só deixa remover quando há mais de uma série
+  function numerarSeries() {
+    const linhas = document.querySelectorAll('#lista-series li');
+    linhas.forEach((li, i) => {
+      li.querySelector('.num').textContent = i + 1;
+      li.querySelector('.s-carga').setAttribute('aria-label', `Carga da série ${i + 1} (kg)`);
+      li.querySelector('.s-reps').setAttribute('aria-label', `Repetições da série ${i + 1}`);
+      li.querySelector('.apagar').setAttribute('aria-label', `Remover série ${i + 1}`);
+      li.querySelector('.apagar').disabled = linhas.length === 1;
+    });
+  }
+
+  const lerSeries = () => [...document.querySelectorAll('#lista-series li')].map((li) => ({
+    carga: Number(li.querySelector('.s-carga').value),
+    repeticoes: Number(li.querySelector('.s-reps').value),
+  }));
+
+  // Nova série começa com os valores da última
+  $('#add-serie').addEventListener('click', () => {
+    const ultima = $('#lista-series li:last-child');
+    $('#lista-series').insertAdjacentHTML('beforeend', linhaSerie({
+      carga: ultima.querySelector('.s-carga').value,
+      repeticoes: ultima.querySelector('.s-reps').value,
+    }));
+    numerarSeries();
+    $('#lista-series li:last-child .s-carga').focus();
+  });
+
+  $('#lista-series').addEventListener('click', (e) => {
+    const botao = e.target.closest('.apagar');
+    if (!botao) return;
+    botao.closest('li').remove();
+    numerarSeries();
+  });
+
+  preencherSeries(SERIES_PADRAO);
+
   async function mostrarUltimo(exercicioId) {
     const alvo = $('#ultimo');
     alvo.textContent = '';
@@ -400,7 +470,7 @@
 
     const { data } = await supabase
       .from('registros')
-      .select('data, series, repeticoes, carga')
+      .select('data, series')
       .eq('exercicio_id', exercicioId)
       .order('data', { ascending: false })
       .order('created_at', { ascending: false })
@@ -408,12 +478,11 @@
 
     if (data?.length) {
       const r = data[0];
-      alvo.textContent = `Última vez (${fmtData(r.data)}): ${r.series} × ${r.repeticoes} com ${fmtKg(r.carga)}`;
-      $('#series').value = r.series;
-      $('#repeticoes').value = r.repeticoes;
-      $('#carga').value = Number(r.carga);
+      alvo.textContent = `Última vez (${fmtData(r.data)}): ${r.series.map(fmtSerie).join(' · ')}`;
+      preencherSeries(r.series);
     } else {
       alvo.textContent = 'Primeiro registro deste exercício.';
+      preencherSeries(SERIES_PADRAO);
     }
   }
 
@@ -424,9 +493,7 @@
     const registro = {
       exercicio_id: Number($('#exercicio').value),
       data: $('#data').value,
-      series: Number($('#series').value),
-      repeticoes: Number($('#repeticoes').value),
-      carga: Number($('#carga').value),
+      series: lerSeries(),
       observacao: $('#observacao').value.trim() || null,
     };
     if (!registro.exercicio_id) return aviso('Cadastre e escolha um exercício primeiro.', true);
@@ -447,7 +514,7 @@
     const lista = $('#lista-historico');
     const { data, error } = await supabase
       .from('registros')
-      .select('id, data, series, repeticoes, carga, observacao, exercicios(nome)')
+      .select('id, data, series, observacao, exercicios(nome)')
       .order('data', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(150);
@@ -472,7 +539,7 @@
             <li>
               <div>
                 <strong>${esc(r.exercicios?.nome ?? '—')}</strong>
-                <span>${r.series} × ${r.repeticoes} · ${fmtKg(r.carga)}</span>
+                <span>${r.series.length} ${r.series.length === 1 ? 'série' : 'séries'}: ${r.series.map(fmtSerie).join(' · ')}</span>
                 ${r.observacao ? `<small>${esc(r.observacao)}</small>` : ''}
               </div>
               <button class="apagar" data-id="${r.id}" aria-label="Apagar registro">×</button>
@@ -491,11 +558,17 @@
   });
 
   // ---------- evolução ----------
+  const CORES = ['#e4572e', '#2e86ab', '#2f9e44', '#f08c00', '#7048e8', '#d6336c'];
   let grafico = null;
+  let sessoes = [];          // registros do exercício escolhido, do mais antigo ao mais recente
+  let metrica = 'carga';     // 'carga' ou 'repeticoes'
 
   async function desenharEvolucao() {
     const resumo = $('#evo-resumo');
     const exercicioId = Number($('#evo-exercicio').value);
+    sessoes = [];
+    $('#evo-grafico').hidden = true;
+    $('#evo-marcos').hidden = true;
     if (grafico) { grafico.destroy(); grafico = null; }
 
     if (!exercicioId) {
@@ -505,9 +578,10 @@
 
     const { data, error } = await supabase
       .from('registros')
-      .select('data, series, repeticoes, carga')
+      .select('data, series')
       .eq('exercicio_id', exercicioId)
-      .order('data');
+      .order('data')
+      .order('created_at');
     if (error) return aviso(error.message, true);
 
     if (!data.length) {
@@ -515,55 +589,122 @@
       return;
     }
 
-    // Por dia: maior carga, maior 1RM estimado (fórmula de Epley) e volume total
-    const dias = new Map();
-    for (const r of data) {
-      const carga = Number(r.carga);
-      const d = dias.get(r.data) ?? { carga: 0, rm: 0, volume: 0 };
-      d.carga = Math.max(d.carga, carga);
-      d.rm = Math.max(d.rm, carga * (1 + r.repeticoes / 30));
-      d.volume += r.series * r.repeticoes * carga;
-      dias.set(r.data, d);
-    }
+    sessoes = data.map((r) => ({
+      data: r.data,
+      series: r.series.map((s) => ({ carga: Number(s.carga), repeticoes: Number(s.repeticoes) })),
+    }));
 
-    const valores = [...dias.values()];
-    const primeira = valores[0].carga;
-    const atual = valores.at(-1).carga;
-    const recorde = Math.max(...valores.map((v) => v.carga));
+    // Resumo: recorde de carga, melhor 1RM estimado (fórmula de Epley) e variação da maior carga
+    const todas = sessoes.flatMap((s) => s.series);
+    const maiorCarga = (sessao) => Math.max(...sessao.series.map((s) => s.carga));
+    const recorde = Math.max(...todas.map((s) => s.carga));
+    const rm = Math.max(...todas.map((s) => s.carga * (1 + s.repeticoes / 30)));
+    const primeira = maiorCarga(sessoes[0]);
+    const atual = maiorCarga(sessoes.at(-1));
     const variacao = primeira > 0
       ? `${((atual - primeira) / primeira * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1, signDisplay: 'exceptZero' })}%`
       : '—';
 
     resumo.innerHTML = `
       <div><b>${fmtKg(recorde)}</b><span>Recorde de carga</span></div>
-      <div><b>${variacao}</b><span>Desde o 1º registro</span></div>
-      <div><b>${fmtKg(primeira)} → ${fmtKg(atual)}</b><span>Primeira → atual</span></div>
-      <div><b>${dias.size}</b><span>Sessões registradas</span></div>`;
+      <div><b>${fmtKg(rm.toFixed(1))}</b><span>Melhor 1RM estimado</span></div>
+      <div><b>${variacao}</b><span>Maior carga desde o 1º registro</span></div>
+      <div><b>${sessoes.length}</b><span>Sessões registradas</span></div>`;
 
+    $('#evo-grafico').hidden = false;
+    desenharGrafico();
+    mostrarMarcos();
+  }
+
+  // Uma linha por série (Série 1, Série 2, ...) com a carga ou as repetições de cada sessão
+  function desenharGrafico() {
+    if (grafico) { grafico.destroy(); grafico = null; }
+    if (!sessoes.length) return;
+
+    const qtdSeries = Math.max(...sessoes.map((s) => s.series.length));
     const corTexto = getComputedStyle(document.body).color;
     grafico = new Chart($('#grafico'), {
       type: 'line',
       data: {
-        labels: [...dias.keys()].map(fmtData),
-        datasets: [
-          { label: 'Maior carga (kg)', data: valores.map((v) => v.carga),
-            borderColor: '#e4572e', backgroundColor: '#e4572e', tension: 0.25 },
-          { label: '1RM estimado (kg)', data: valores.map((v) => Number(v.rm.toFixed(1))),
-            borderColor: '#2e86ab', backgroundColor: '#2e86ab', borderDash: [6, 4], tension: 0.25 },
-        ],
+        labels: sessoes.map((s) => fmtData(s.data)),
+        datasets: Array.from({ length: qtdSeries }, (_, n) => {
+          const cor = CORES[n % CORES.length];
+          return {
+            label: `Série ${n + 1}`,
+            data: sessoes.map((s) => s.series[n]?.[metrica] ?? null),
+            borderColor: cor, backgroundColor: cor, tension: 0.25, spanGaps: true,
+          };
+        }),
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
-        plugins: { legend: { labels: { color: corTexto } } },
+        plugins: {
+          legend: { labels: { color: corTexto } },
+          tooltip: {
+            filter: (item) => item.raw !== null,
+            callbacks: {
+              label: (ctx) => `Série ${ctx.datasetIndex + 1}: ${fmtSerie(sessoes[ctx.dataIndex].series[ctx.datasetIndex])}`,
+            },
+          },
+        },
         scales: {
           x: { ticks: { color: corTexto } },
-          y: { ticks: { color: corTexto }, title: { display: true, text: 'kg', color: corTexto } },
+          y: { ticks: { color: corTexto, precision: metrica === 'repeticoes' ? 0 : undefined },
+               title: { display: true, text: metrica === 'carga' ? 'kg' : 'repetições', color: corTexto } },
         },
       },
     });
   }
+
+  // Compara cada sessão com a anterior, série a série, e lista o que mudou
+  function mostrarMarcos() {
+    const marcos = [];
+    for (let i = 1; i < sessoes.length; i++) {
+      const antes = sessoes[i - 1].series;
+      const agora = sessoes[i].series;
+      const mudancas = [];
+      for (let n = 0; n < Math.max(antes.length, agora.length); n++) {
+        const a = antes[n];
+        const s = agora[n];
+        if (!a) { mudancas.push({ n, tipo: 'neutro', texto: `nova série (${fmtSerie(s)})` }); continue; }
+        if (!s) { mudancas.push({ n, tipo: 'neutro', texto: 'não realizada' }); continue; }
+        if (s.carga !== a.carga) {
+          mudancas.push({ n, tipo: s.carga > a.carga ? 'sobe' : 'desce',
+                          texto: `carga ${fmtNum(a.carga)} → ${fmtKg(s.carga)}` });
+        }
+        if (s.repeticoes !== a.repeticoes) {
+          mudancas.push({ n, tipo: s.repeticoes > a.repeticoes ? 'sobe' : 'desce',
+                          texto: `${a.repeticoes} → ${s.repeticoes} repetições` });
+        }
+      }
+      if (mudancas.length) marcos.push({ data: sessoes[i].data, mudancas });
+    }
+
+    const setas = { sobe: '▲', desce: '▼', neutro: '•' };
+    $('#evo-marcos').hidden = false;
+    $('#evo-marcos').innerHTML = '<h2>Mudanças por série</h2>' + (marcos.length
+      ? marcos.reverse().map((m) => `
+          <div class="marco">
+            <h3>${fmtData(m.data)}</h3>
+            <ul>
+              ${m.mudancas.map((c) => `
+                <li><span class="${c.tipo}">${setas[c.tipo]}</span> <strong>Série ${c.n + 1}</strong> · ${c.texto}</li>`).join('')}
+            </ul>
+          </div>`).join('')
+      : `<p class="vazio">${sessoes.length < 2
+          ? 'Registre mais uma sessão para comparar as séries.'
+          : 'Nenhuma mudança de carga ou repetições até agora.'}</p>`);
+  }
+
+  document.querySelectorAll('[data-metrica]').forEach((b) =>
+    b.addEventListener('click', () => {
+      metrica = b.dataset.metrica;
+      document.querySelectorAll('[data-metrica]').forEach((x) =>
+        x.setAttribute('aria-pressed', String(x === b)));
+      desenharGrafico();
+    }));
 
   $('#evo-exercicio').addEventListener('change', desenharEvolucao);
 </script>
