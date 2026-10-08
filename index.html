@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meu Treino</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --texto: #1c1f24; --suave: #6b7280;
+    --borda: #e2e5ea; --destaque: #e4572e; --destaque-2: #2e86ab; --ok: #2f9e44; --erro: #c92a2a;
+    --raio: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111317; --card: #1b1e24; --texto: #eceef2; --suave: #9aa1ad; --borda: #2c313a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--texto);
+         font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 16px 16px 80px; }
+  h1 { font-size: 1.5rem; margin: 8px 0 16px; }
+  h2 { font-size: 1.1rem; margin: 0 0 12px; }
+  .card { background: var(--card); border: 1px solid var(--borda); border-radius: var(--raio);
+          padding: 16px; margin-bottom: 14px; }
+  label { display: block; font-size: .85rem; color: var(--suave); margin-bottom: 4px; }
+  input, select, textarea, button { font: inherit; }
+  input, select, textarea { width: 100%; padding: 11px 12px; border-radius: 10px;
+          border: 1px solid var(--borda); background: var(--bg); color: var(--texto); }
+  .campo { margin-bottom: 12px; }
+  .grade-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  button { cursor: pointer; border: 0; border-radius: 10px; padding: 12px 16px; font-weight: 600; }
+  .primario { background: var(--destaque); color: #fff; width: 100%; }
+  .secundario { background: transparent; color: var(--texto); border: 1px solid var(--borda); }
+  .linha { display: flex; gap: 10px; }
+  .linha > * { flex: 1; }
+  .topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .topo small { color: var(--suave); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topo button { padding: 8px 12px; }
+
+  nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 14px;
+        background: var(--card); border: 1px solid var(--borda); border-radius: var(--raio); padding: 5px; }
+  nav button { background: transparent; color: var(--suave); padding: 10px 4px; }
+  nav button[aria-selected="true"] { background: var(--destaque); color: #fff; }
+
+  details summary { cursor: pointer; color: var(--destaque-2); font-weight: 600; margin: 4px 0 10px; }
+  #ultimo { font-size: .9rem; color: var(--destaque-2); min-height: 1.3em; margin: -4px 0 12px; }
+
+  .dia h3 { font-size: .9rem; color: var(--suave); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; }
+  .dia ul { list-style: none; margin: 0; padding: 0; }
+  .dia li { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+            padding: 10px 0; border-top: 1px solid var(--borda); }
+  .dia li:first-child { border-top: 0; }
+  .dia li span, .dia li small { display: block; color: var(--suave); font-size: .9rem; }
+  .apagar { background: transparent; color: var(--suave); font-size: 1.3rem; padding: 4px 10px; }
+  .apagar:hover { color: var(--erro); }
+  .vazio { color: var(--suave); text-align: center; margin: 20px 0; }
+
+  .resumo { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 14px; }
+  .resumo div { background: var(--bg); border-radius: 10px; padding: 10px 12px; }
+  .resumo b { display: block; font-size: 1.2rem; }
+  .resumo span { font-size: .8rem; color: var(--suave); }
+  .grafico-box { position: relative; height: 290px; }
+
+  #aviso { position: fixed; left: 50%; bottom: 20px; transform: translate(-50%, 150%);
+           background: var(--ok); color: #fff; padding: 12px 18px; border-radius: 10px;
+           transition: transform .25s; max-width: calc(100% - 32px); z-index: 10; }
+  #aviso.visivel { transform: translate(-50%, 0); }
+  #aviso.erro { background: var(--erro); }
+</style>
+</head>
+<body>
+<main>
+  <!-- ============ LOGIN ============ -->
+  <section id="tela-login" hidden>
+    <h1>🏋️ Meu Treino</h1>
+    <form id="form-login" class="card">
+      <h2>Entrar</h2>
+      <div class="campo">
+        <label for="email">E-mail</label>
+        <input id="email" type="email" autocomplete="email" required>
+      </div>
+      <div class="campo">
+        <label for="senha">Senha (mínimo 6 caracteres)</label>
+        <input id="senha" type="password" minlength="6" autocomplete="current-password" required>
+      </div>
+      <div class="linha">
+        <button class="primario" value="entrar">Entrar</button>
+        <button class="secundario" value="cadastrar">Criar conta</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ============ APP ============ -->
+  <section id="tela-app" hidden>
+    <div class="topo">
+      <h1>🏋️ Meu Treino</h1>
+      <div style="text-align:right; min-width:0">
+        <small id="usuario"></small><br>
+        <button id="sair" class="secundario">Sair</button>
+      </div>
+    </div>
+
+    <nav role="tablist">
+      <button class="aba-botao" data-aba="registrar" aria-selected="true">Registrar</button>
+      <button class="aba-botao" data-aba="historico" aria-selected="false">Histórico</button>
+      <button class="aba-botao" data-aba="evolucao" aria-selected="false">Evolução</button>
+    </nav>
+
+    <!-- Registrar -->
+    <div id="aba-registrar" class="aba">
+      <form id="form-registro" class="card">
+        <h2>Novo registro</h2>
+        <div class="campo">
+          <label for="exercicio">Exercício</label>
+          <select id="exercicio" required></select>
+        </div>
+        <p id="ultimo"></p>
+        <div class="campo">
+          <label for="data">Data</label>
+          <input id="data" type="date" required>
+        </div>
+        <div class="grade-3 campo">
+          <div>
+            <label for="series">Séries</label>
+            <input id="series" type="number" inputmode="numeric" min="1" value="3" required>
+          </div>
+          <div>
+            <label for="repeticoes">Repetições</label>
+            <input id="repeticoes" type="number" inputmode="numeric" min="1" value="10" required>
+          </div>
+          <div>
+            <label for="carga">Carga (kg)</label>
+            <input id="carga" type="number" inputmode="decimal" min="0" step="0.5" required>
+          </div>
+        </div>
+        <div class="campo">
+          <label for="observacao">Observação (opcional)</label>
+          <input id="observacao" type="text" placeholder="Ex.: última série até a falha">
+        </div>
+        <button class="primario">Salvar registro</button>
+      </form>
+
+      <div class="card">
+        <details>
+          <summary>+ Cadastrar novo exercício</summary>
+          <form id="form-exercicio">
+            <div class="campo">
+              <label for="novo-nome">Nome</label>
+              <input id="novo-nome" type="text" maxlength="80" placeholder="Ex.: Supino reto" required>
+            </div>
+            <div class="campo">
+              <label for="novo-grupo">Grupo muscular (opcional)</label>
+              <input id="novo-grupo" type="text" list="grupos" placeholder="Ex.: Peito">
+              <datalist id="grupos">
+                <option>Peito</option><option>Costas</option><option>Pernas</option>
+                <option>Ombros</option><option>Bíceps</option><option>Tríceps</option>
+                <option>Abdômen</option><option>Glúteos</option><option>Panturrilha</option>
+              </datalist>
+            </div>
+            <button class="primario">Adicionar exercício</button>
+          </form>
+        </details>
+      </div>
+    </div>
+
+    <!-- Histórico -->
+    <div id="aba-historico" class="aba" hidden>
+      <div id="lista-historico"></div>
+    </div>
+
+    <!-- Evolução -->
+    <div id="aba-evolucao" class="aba" hidden>
+      <div class="card">
+        <div class="campo">
+          <label for="evo-exercicio">Exercício</label>
+          <select id="evo-exercicio"></select>
+        </div>
+        <div id="evo-resumo" class="resumo"></div>
+        <div class="grafico-box"><canvas id="grafico"></canvas></div>
+      </div>
+    </div>
+  </section>
+</main>
+<div id="aviso" role="status"></div>
+
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+  // ================================================================
+  //  CONFIGURAÇÃO — cole aqui os dados do seu projeto Supabase
+  //  (painel do projeto → botão "Connect" ou Project Settings → API)
+  // ================================================================
+  const SUPABASE_URL = 'https://aqymnknfwjiyhqzwyuas.supabase.co';        // ex.: https://abcd1234.supabase.co
+  const SUPABASE_KEY = 'sb_publishable_Io1jQve-Tf8JA0BTiyxOwg_j2C1McYY';         // chave "publishable" ou "anon"
+  // ================================================================
+
+  const $ = (seletor) => document.querySelector(seletor);
+
+  if (SUPABASE_URL.startsWith('COLE_AQUI')) {
+    $('main').innerHTML = '<div class="card"><h2>Falta configurar</h2>' +
+      '<p>Abra o <code>index.html</code> e preencha <code>SUPABASE_URL</code> e ' +
+      '<code>SUPABASE_KEY</code> no início do script. O README explica onde encontrar.</p></div>';
+    throw new Error('Supabase não configurado');
+  }
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // ---------- utilidades ----------
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  function hoje() {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 10);
+  }
+  function fmtData(iso) {
+    const [a, m, d] = iso.split('-');
+    return `${d}/${m}/${a}`;
+  }
+  const fmtKg = (n) => Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' kg';
+
+  let timerAviso;
+  function aviso(msg, erro = false) {
+    const t = $('#aviso');
+    t.textContent = msg;
+    t.className = erro ? 'erro visivel' : 'visivel';
+    clearTimeout(timerAviso);
+    timerAviso = setTimeout(() => { t.className = ''; }, 3500);
+  }
+
+  // ---------- autenticação ----------
+  $('#form-login').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = $('#email').value.trim();
+    const password = $('#senha').value;
+
+    if (e.submitter?.value === 'cadastrar') {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      if (error) return aviso(error.message, true);
+      if (!data.session) aviso('Conta criada! Confirme pelo link enviado ao seu e-mail e depois entre.');
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return aviso('Não foi possível entrar: ' + error.message, true);
+    }
+  });
+
+  $('#sair').addEventListener('click', () => supabase.auth.signOut());
+
+  let usuarioAtual = null;
+  // setTimeout evita chamar o Supabase de dentro do callback (recomendação da documentação)
+  supabase.auth.onAuthStateChange((_evento, session) => {
+    setTimeout(() => mostrarTela(session), 0);
+  });
+
+  async function mostrarTela(session) {
+    const logado = Boolean(session);
+    $('#tela-login').hidden = logado;
+    $('#tela-app').hidden = !logado;
+    if (!logado) { usuarioAtual = null; return; }
+    if (usuarioAtual === session.user.id) return;   // ex.: renovação de token
+
+    usuarioAtual = session.user.id;
+    $('#usuario').textContent = session.user.email;
+    $('#data').value = hoje();
+    abrirAba('registrar');
+    await carregarExercicios();
+    mostrarUltimo(Number($('#exercicio').value));
+  }
+
+  // ---------- abas ----------
+  document.querySelectorAll('.aba-botao').forEach((b) =>
+    b.addEventListener('click', () => abrirAba(b.dataset.aba)));
+
+  function abrirAba(nome) {
+    document.querySelectorAll('.aba-botao').forEach((b) =>
+      b.setAttribute('aria-selected', String(b.dataset.aba === nome)));
+    document.querySelectorAll('.aba').forEach((s) => { s.hidden = s.id !== 'aba-' + nome; });
+    if (nome === 'historico') carregarHistorico();
+    if (nome === 'evolucao') desenharEvolucao();
+  }
+
+  // ---------- exercícios ----------
+  async function carregarExercicios() {
+    const { data, error } = await supabase
+      .from('exercicios')
+      .select('id, nome, grupo_muscular')
+      .order('nome');
+    if (error) return aviso(error.message, true);
+
+    const opcoes = data.map((e) =>
+      `<option value="${e.id}">${esc(e.nome)}${e.grupo_muscular ? ' · ' + esc(e.grupo_muscular) : ''}</option>`
+    ).join('');
+    $('#exercicio').innerHTML = opcoes || '<option value="">Cadastre um exercício abaixo ↓</option>';
+    $('#evo-exercicio').innerHTML = opcoes || '<option value="">Nenhum exercício cadastrado</option>';
+    if (!data.length) $('details').open = true;
+  }
+
+  $('#form-exercicio').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const nome = $('#novo-nome').value.trim();
+    const grupo_muscular = $('#novo-grupo').value.trim() || null;
+    if (!nome) return;
+
+    const { data, error } = await supabase
+      .from('exercicios')
+      .insert({ nome, grupo_muscular })
+      .select()
+      .single();
+    if (error) {
+      return aviso(error.code === '23505' ? 'Você já tem um exercício com esse nome.' : error.message, true);
+    }
+    e.target.reset();
+    await carregarExercicios();
+    $('#exercicio').value = data.id;
+    mostrarUltimo(data.id);
+    aviso('Exercício adicionado.');
+  });
+
+  // ---------- registros ----------
+  async function mostrarUltimo(exercicioId) {
+    const alvo = $('#ultimo');
+    alvo.textContent = '';
+    if (!exercicioId) return;
+
+    const { data } = await supabase
+      .from('registros')
+      .select('data, series, repeticoes, carga')
+      .eq('exercicio_id', exercicioId)
+      .order('data', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (data?.length) {
+      const r = data[0];
+      alvo.textContent = `Última vez (${fmtData(r.data)}): ${r.series} × ${r.repeticoes} com ${fmtKg(r.carga)}`;
+      $('#series').value = r.series;
+      $('#repeticoes').value = r.repeticoes;
+      $('#carga').value = Number(r.carga);
+    } else {
+      alvo.textContent = 'Primeiro registro deste exercício.';
+    }
+  }
+
+  $('#exercicio').addEventListener('change', (e) => mostrarUltimo(Number(e.target.value)));
+
+  $('#form-registro').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const registro = {
+      exercicio_id: Number($('#exercicio').value),
+      data: $('#data').value,
+      series: Number($('#series').value),
+      repeticoes: Number($('#repeticoes').value),
+      carga: Number($('#carga').value),
+      observacao: $('#observacao').value.trim() || null,
+    };
+    if (!registro.exercicio_id) return aviso('Cadastre e escolha um exercício primeiro.', true);
+
+    const botao = e.submitter;
+    botao.disabled = true;
+    const { error } = await supabase.from('registros').insert(registro);
+    botao.disabled = false;
+    if (error) return aviso(error.message, true);
+
+    $('#observacao').value = '';
+    aviso('Treino registrado! 💪');
+    mostrarUltimo(registro.exercicio_id);
+  });
+
+  // ---------- histórico ----------
+  async function carregarHistorico() {
+    const lista = $('#lista-historico');
+    const { data, error } = await supabase
+      .from('registros')
+      .select('id, data, series, repeticoes, carga, observacao, exercicios(nome)')
+      .order('data', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(150);
+    if (error) return aviso(error.message, true);
+
+    if (!data.length) {
+      lista.innerHTML = '<div class="card"><p class="vazio">Nenhum treino registrado ainda.</p></div>';
+      return;
+    }
+
+    const porDia = new Map();
+    for (const r of data) {
+      if (!porDia.has(r.data)) porDia.set(r.data, []);
+      porDia.get(r.data).push(r);
+    }
+
+    lista.innerHTML = [...porDia].map(([dia, itens]) => `
+      <div class="card dia">
+        <h3>${fmtData(dia)}</h3>
+        <ul>
+          ${itens.map((r) => `
+            <li>
+              <div>
+                <strong>${esc(r.exercicios?.nome ?? '—')}</strong>
+                <span>${r.series} × ${r.repeticoes} · ${fmtKg(r.carga)}</span>
+                ${r.observacao ? `<small>${esc(r.observacao)}</small>` : ''}
+              </div>
+              <button class="apagar" data-id="${r.id}" aria-label="Apagar registro">×</button>
+            </li>`).join('')}
+        </ul>
+      </div>`).join('');
+  }
+
+  $('#lista-historico').addEventListener('click', async (e) => {
+    const botao = e.target.closest('.apagar');
+    if (!botao || !confirm('Apagar este registro?')) return;
+    const { error } = await supabase.from('registros').delete().eq('id', botao.dataset.id);
+    if (error) return aviso(error.message, true);
+    aviso('Registro apagado.');
+    carregarHistorico();
+  });
+
+  // ---------- evolução ----------
+  let grafico = null;
+
+  async function desenharEvolucao() {
+    const resumo = $('#evo-resumo');
+    const exercicioId = Number($('#evo-exercicio').value);
+    if (grafico) { grafico.destroy(); grafico = null; }
+
+    if (!exercicioId) {
+      resumo.innerHTML = '<p class="vazio" style="grid-column:1/-1">Cadastre um exercício para ver a evolução.</p>';
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('registros')
+      .select('data, series, repeticoes, carga')
+      .eq('exercicio_id', exercicioId)
+      .order('data');
+    if (error) return aviso(error.message, true);
+
+    if (!data.length) {
+      resumo.innerHTML = '<p class="vazio" style="grid-column:1/-1">Ainda não há registros deste exercício.</p>';
+      return;
+    }
+
+    // Por dia: maior carga, maior 1RM estimado (fórmula de Epley) e volume total
+    const dias = new Map();
+    for (const r of data) {
+      const carga = Number(r.carga);
+      const d = dias.get(r.data) ?? { carga: 0, rm: 0, volume: 0 };
+      d.carga = Math.max(d.carga, carga);
+      d.rm = Math.max(d.rm, carga * (1 + r.repeticoes / 30));
+      d.volume += r.series * r.repeticoes * carga;
+      dias.set(r.data, d);
+    }
+
+    const valores = [...dias.values()];
+    const primeira = valores[0].carga;
+    const atual = valores.at(-1).carga;
+    const recorde = Math.max(...valores.map((v) => v.carga));
+    const variacao = primeira > 0
+      ? `${((atual - primeira) / primeira * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1, signDisplay: 'exceptZero' })}%`
+      : '—';
+
+    resumo.innerHTML = `
+      <div><b>${fmtKg(recorde)}</b><span>Recorde de carga</span></div>
+      <div><b>${variacao}</b><span>Desde o 1º registro</span></div>
+      <div><b>${fmtKg(primeira)} → ${fmtKg(atual)}</b><span>Primeira → atual</span></div>
+      <div><b>${dias.size}</b><span>Sessões registradas</span></div>`;
+
+    const corTexto = getComputedStyle(document.body).color;
+    grafico = new Chart($('#grafico'), {
+      type: 'line',
+      data: {
+        labels: [...dias.keys()].map(fmtData),
+        datasets: [
+          { label: 'Maior carga (kg)', data: valores.map((v) => v.carga),
+            borderColor: '#e4572e', backgroundColor: '#e4572e', tension: 0.25 },
+          { label: '1RM estimado (kg)', data: valores.map((v) => Number(v.rm.toFixed(1))),
+            borderColor: '#2e86ab', backgroundColor: '#2e86ab', borderDash: [6, 4], tension: 0.25 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { labels: { color: corTexto } } },
+        scales: {
+          x: { ticks: { color: corTexto } },
+          y: { ticks: { color: corTexto }, title: { display: true, text: 'kg', color: corTexto } },
+        },
+      },
+    });
+  }
+
+  $('#evo-exercicio').addEventListener('change', desenharEvolucao);
+</script>
+</body>
+</html>
