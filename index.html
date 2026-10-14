@@ -27,6 +27,7 @@
   input, select, textarea { width: 100%; padding: 11px 12px; border-radius: 10px;
           border: 1px solid var(--borda); background: var(--bg); color: var(--texto); }
   .campo { margin-bottom: 12px; }
+  fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
   .series { list-style: none; margin: 0 0 10px; padding: 0; }
   .serie, .series-cabecalho { display: grid; grid-template-columns: 2rem 1fr 1fr 2.5rem; gap: 8px; align-items: center; }
   .serie { margin-bottom: 8px; }
@@ -46,12 +47,36 @@
   .topo small { color: var(--suave); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .topo button { padding: 8px 12px; }
 
-  nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 14px;
+  nav { display: flex; gap: 4px; margin-bottom: 14px;
         background: var(--card); border: 1px solid var(--borda); border-radius: var(--raio); padding: 5px; }
-  nav button { background: transparent; color: var(--suave); padding: 10px 2px; font-size: .85rem; }
+  nav button { flex: 1 1 auto; background: transparent; color: var(--suave); padding: 10px 2px; font-size: .8rem; }
   nav button[aria-selected="true"] { background: var(--destaque); color: #fff; }
 
   #ultimo { font-size: .9rem; color: var(--destaque-2); min-height: 1.3em; margin: -4px 0 12px; }
+
+  /* Exercícios da ficha escolhida no Registrar */
+  .progresso { font-size: .85rem; color: var(--suave); margin: 0 0 8px; }
+  .roteiro { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+  .roteiro button { width: 100%; display: flex; align-items: center; gap: 10px; text-align: left;
+                    background: var(--bg); color: var(--texto); border: 1px solid var(--borda);
+                    padding: 10px 12px; font-weight: 400; }
+  .roteiro button[aria-current="step"] { border-color: var(--destaque); box-shadow: inset 0 0 0 1px var(--destaque); }
+  .roteiro small { display: block; color: var(--suave); font-size: .85rem; }
+  .marca { flex: none; width: 1.7rem; height: 1.7rem; border-radius: 50%; display: grid; place-items: center;
+           font-size: .85rem; font-weight: 600; background: var(--borda); color: var(--suave); }
+  .feito .marca { background: var(--ok); color: #fff; }
+
+  /* Exercícios no formulário de ficha */
+  .itens-ficha { list-style: none; margin: 0 0 12px; padding: 0; }
+  .item-ficha { display: grid; grid-template-columns: 1.5rem 1fr auto auto auto; gap: 4px; align-items: center;
+                padding: 8px 0; border-top: 1px solid var(--borda); }
+  .item-ficha:first-child { border-top: 0; }
+  .item-ficha .num { text-align: center; font-weight: 600; color: var(--suave); }
+  .item-ficha > div { min-width: 0; overflow-wrap: anywhere; }
+  .item-ficha span { display: block; color: var(--suave); font-size: .85rem; }
+  .mover { background: transparent; color: var(--suave); border: 1px solid var(--borda); padding: 6px 10px; }
+  .mover:disabled { opacity: .35; cursor: default; }
+  .acoes { display: flex; flex: none; }
 
   .dia h3, .marco h3 { font-size: .9rem; color: var(--suave); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; }
   .lista ul { list-style: none; margin: 0; padding: 0; }
@@ -125,6 +150,7 @@
       <button class="aba-botao" data-aba="registrar" aria-selected="true">Registrar</button>
       <button class="aba-botao" data-aba="historico" aria-selected="false">Histórico</button>
       <button class="aba-botao" data-aba="evolucao" aria-selected="false">Evolução</button>
+      <button class="aba-botao" data-aba="fichas" aria-selected="false">Fichas</button>
       <button class="aba-botao" data-aba="exercicios" aria-selected="false">Exercícios</button>
     </nav>
 
@@ -133,13 +159,23 @@
       <form id="form-registro" class="card">
         <h2>Novo registro</h2>
         <div class="campo">
-          <label for="grupo">Grupo muscular</label>
-          <select id="grupo" required></select>
+          <label for="ficha">Ficha</label>
+          <select id="ficha"></select>
         </div>
-        <div class="campo">
-          <label for="exercicio">Exercício</label>
-          <select id="exercicio" required></select>
+        <div id="roteiro" hidden>
+          <p id="progresso" class="progresso"></p>
+          <ol id="roteiro-lista" class="roteiro"></ol>
         </div>
+        <fieldset id="campos-avulso">
+          <div class="campo">
+            <label for="grupo">Grupo muscular</label>
+            <select id="grupo" required></select>
+          </div>
+          <div class="campo">
+            <label for="exercicio">Exercício</label>
+            <select id="exercicio" required></select>
+          </div>
+        </fieldset>
         <p id="ultimo"></p>
         <div class="campo">
           <label for="data">Data</label>
@@ -182,6 +218,39 @@
         </div>
       </div>
       <div id="evo-marcos" class="card" hidden></div>
+    </div>
+
+    <!-- Fichas -->
+    <div id="aba-fichas" class="aba" hidden>
+      <form id="form-ficha" class="card">
+        <h2 id="titulo-ficha">Nova ficha</h2>
+        <div class="campo">
+          <label for="ficha-nome">Nome</label>
+          <input id="ficha-nome" type="text" maxlength="80" placeholder="Ex.: Treino A" required>
+        </div>
+        <div class="campo">
+          <label for="ficha-descricao">Descrição (opcional)</label>
+          <input id="ficha-descricao" type="text" maxlength="160" placeholder="Ex.: Push — peito, ombros e tríceps">
+        </div>
+        <div class="campo">
+          <label>Exercícios, na ordem do treino</label>
+          <ol id="ficha-itens" class="itens-ficha"></ol>
+        </div>
+        <div class="campo">
+          <label for="ficha-grupo">Adicionar exercício: grupo muscular</label>
+          <select id="ficha-grupo"></select>
+        </div>
+        <div class="campo">
+          <label for="ficha-exercicio">Exercício</label>
+          <select id="ficha-exercicio"></select>
+        </div>
+        <div class="linha">
+          <button id="cancelar-ficha" class="secundario" type="button" hidden>Cancelar</button>
+          <button id="salvar-ficha" class="primario">Criar ficha</button>
+        </div>
+      </form>
+
+      <div id="lista-fichas"></div>
     </div>
 
     <!-- Exercícios -->
@@ -302,9 +371,11 @@
     $('#usuario').textContent = session.user.email;
     $('#data').value = hoje();
     cancelarEdicao();
+    cancelarEdicaoFicha();
     abrirAba('registrar');
     await carregarGrupos();
     await carregarExercicios();
+    await carregarFichas();
   }
 
   // ---------- abas ----------
@@ -315,6 +386,7 @@
     document.querySelectorAll('.aba-botao').forEach((b) =>
       b.setAttribute('aria-selected', String(b.dataset.aba === nome)));
     document.querySelectorAll('.aba').forEach((s) => { s.hidden = s.id !== 'aba-' + nome; });
+    if (nome === 'registrar') atualizarRoteiro();   // um registro pode ter sido apagado no Histórico
     if (nome === 'historico') carregarHistorico();
     if (nome === 'evolucao') desenharEvolucao();
   }
@@ -332,11 +404,13 @@
     const opcoes = grupos.map((g) => `<option value="${g.id}">${esc(g.nome)}</option>`).join('');
     $('#grupo').innerHTML = '<option value="">Selecione o grupo muscular</option>' + opcoes;
     $('#novo-grupo').innerHTML = '<option value="">Selecione o grupo muscular</option>' + opcoes;
+    $('#ficha-grupo').innerHTML = '<option value="">Selecione o grupo muscular</option>' + opcoes;
   }
 
   // ---------- exercícios ----------
   let exercicios = [];
   let editandoId = null;
+  const exercicioPorId = (id) => exercicios.find((e) => e.id === id);
 
   async function carregarExercicios() {
     const { data, error } = await supabase
@@ -371,6 +445,11 @@
         </ul>
       </div>`
       : '<div class="card"><p class="vazio">Nenhum exercício cadastrado ainda.</p></div>';
+
+    // Fichas mostram nome e grupo dos exercícios, que podem ter acabado de mudar
+    desenharItensFicha();
+    desenharListaFichas();
+    desenharRoteiro();
   }
 
   // No Registrar, o exercício só lista os do grupo escolhido, mantendo o que já estava selecionado
@@ -388,7 +467,8 @@
           doGrupo.map((e) => `<option value="${e.id}">${esc(e.nome)}</option>`).join('')
         : '<option value="">Nenhum exercício neste grupo — cadastre na aba Exercícios</option>';
     if (doGrupo.some((e) => String(e.id) === anterior)) select.value = anterior;
-    if (select.value !== anterior) mostrarUltimo(Number(select.value));
+    // Pela ficha, quem escolhe o exercício (e carrega as séries) é selecionarPasso
+    if (select.value !== anterior && !modoFicha()) mostrarUltimo(Number(select.value));
   }
 
   $('#grupo').addEventListener('change', preencherExerciciosDoGrupo);
@@ -437,7 +517,8 @@
     await carregarExercicios();
     if (editando) return aviso('Exercício atualizado.');
 
-    // Deixa o novo exercício pronto para registrar
+    // Deixa o novo exercício pronto para registrar (como avulso)
+    if (fichaSelecionada()) { $('#ficha').value = ''; atualizarRoteiro(); }
     $('#grupo').value = data.grupo_muscular_id;
     preencherExerciciosDoGrupo();
     $('#exercicio').value = data.id;
@@ -499,7 +580,9 @@
 
   preencherSeries(SERIES_PADRAO);
 
+  let pedidoUltimo = null;
   async function mostrarUltimo(exercicioId) {
+    pedidoUltimo = exercicioId;
     const alvo = $('#ultimo');
     alvo.textContent = '';
     if (!exercicioId) return preencherSeries(SERIES_PADRAO);
@@ -511,6 +594,8 @@
       .order('data', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(1);
+    // Outro exercício foi escolhido enquanto a consulta rodava
+    if (pedidoUltimo !== exercicioId) return;
 
     if (data?.length) {
       const r = data[0];
@@ -527,7 +612,7 @@
   $('#form-registro').addEventListener('submit', async (e) => {
     e.preventDefault();
     const registro = {
-      exercicio_id: Number($('#exercicio').value),
+      exercicio_id: modoFicha() ? passoAtual : Number($('#exercicio').value),
       data: $('#data').value,
       series: lerSeries(),
       observacao: $('#observacao').value.trim() || null,
@@ -541,8 +626,306 @@
     if (error) return aviso(error.message, true);
 
     $('#observacao').value = '';
-    aviso('Treino registrado! 💪');
-    mostrarUltimo(registro.exercicio_id);
+    if (!modoFicha()) {
+      aviso('Treino registrado! 💪');
+      return mostrarUltimo(registro.exercicio_id);
+    }
+
+    // Pela ficha: marca como feito e passa para o próximo pendente
+    feitos.add(registro.exercicio_id);
+    const proximo = proximoPendente(registro.exercicio_id);
+    aviso(proximo ? 'Treino registrado! 💪' : 'Ficha concluída! 🎉');
+    if (proximo) selecionarPasso(proximo);
+    else { desenharRoteiro(); mostrarUltimo(registro.exercicio_id); }
+  });
+
+  // ---------- fichas ----------
+  // Cada ficha: { id, nome, descricao, itens: [exercicio_id, ...] }, com os itens na ordem do treino
+  let fichas = [];
+  let itensFicha = [];        // exercícios do formulário de ficha, na ordem
+  let editandoFichaId = null;
+
+  async function carregarFichas() {
+    const { data, error } = await supabase
+      .from('fichas')
+      .select('id, nome, descricao, ficha_exercicios(exercicio_id, ordem)');
+    if (error) return aviso(error.message, true);
+    fichas = data.sort(porNome).map((f) => ({
+      id: f.id,
+      nome: f.nome,
+      descricao: f.descricao,
+      itens: f.ficha_exercicios.sort((a, b) => a.ordem - b.ordem).map((i) => i.exercicio_id),
+    }));
+
+    // No Registrar, mantém a ficha que já estava selecionada
+    const select = $('#ficha');
+    const anterior = select.value;
+    select.innerHTML = '<option value="">Exercício avulso</option>' +
+      fichas.map((f) => `<option value="${f.id}">${esc(f.nome)}</option>`).join('');
+    if (fichas.some((f) => String(f.id) === anterior)) select.value = anterior;
+
+    desenharListaFichas();
+    await atualizarRoteiro();
+  }
+
+  function desenharListaFichas() {
+    $('#lista-fichas').innerHTML = fichas.length ? `
+      <div class="card lista">
+        <h2>Minhas fichas (${fichas.length})</h2>
+        <ul>
+          ${fichas.map((f) => `
+            <li>
+              <div>
+                <strong>${esc(f.nome)}</strong>
+                ${f.descricao ? `<span>${esc(f.descricao)}</span>` : ''}
+                <small>${f.itens.length
+                  ? f.itens.map((id) => esc(exercicioPorId(id)?.nome ?? '—')).join(' · ')
+                  : 'Sem exercícios — edite para adicionar'}</small>
+              </div>
+              <div class="acoes">
+                <button class="editar" data-id="${f.id}" aria-label="Editar ${esc(f.nome)}">✎</button>
+                <button class="apagar" data-id="${f.id}" aria-label="Excluir ${esc(f.nome)}">×</button>
+              </div>
+            </li>`).join('')}
+        </ul>
+      </div>`
+      : '<div class="card"><p class="vazio">Nenhuma ficha criada ainda.</p></div>';
+  }
+
+  function desenharItensFicha() {
+    $('#ficha-itens').innerHTML = itensFicha.map((id, i) => {
+      const ex = exercicioPorId(id);
+      const nome = esc(ex?.nome ?? '—');
+      return `
+        <li class="item-ficha">
+          <span class="num">${i + 1}</span>
+          <div><strong>${nome}</strong><span>${esc(nomeGrupo(ex?.grupo_muscular_id) ?? '')}</span></div>
+          <button class="mover" type="button" data-acao="subir" data-i="${i}"
+                  aria-label="Mover ${nome} para cima" ${i === 0 ? 'disabled' : ''}>↑</button>
+          <button class="mover" type="button" data-acao="descer" data-i="${i}"
+                  aria-label="Mover ${nome} para baixo" ${i === itensFicha.length - 1 ? 'disabled' : ''}>↓</button>
+          <button class="apagar" type="button" data-acao="remover" data-i="${i}"
+                  aria-label="Remover ${nome} da ficha">×</button>
+        </li>`;
+    }).join('') || '<li class="vazio">Nenhum exercício ainda. Adicione abaixo.</li>';
+    preencherExerciciosDaFicha();
+  }
+
+  // Lista os exercícios do grupo escolhido que ainda não estão na ficha
+  function preencherExerciciosDaFicha() {
+    const select = $('#ficha-exercicio');
+    const grupoId = Number($('#ficha-grupo').value);
+    const disponiveis = exercicios.filter((e) => e.grupo_muscular_id === grupoId && !itensFicha.includes(e.id));
+
+    select.disabled = !grupoId;
+    select.innerHTML = !grupoId
+      ? '<option value="">Selecione o grupo muscular primeiro</option>'
+      : disponiveis.length
+        ? '<option value="">Escolha para adicionar à ficha</option>' +
+          disponiveis.map((e) => `<option value="${e.id}">${esc(e.nome)}</option>`).join('')
+        : '<option value="">Nenhum exercício disponível neste grupo</option>';
+  }
+
+  $('#ficha-grupo').addEventListener('change', preencherExerciciosDaFicha);
+
+  // Escolher um exercício já o coloca no fim da ficha
+  $('#ficha-exercicio').addEventListener('change', (e) => {
+    const id = Number(e.target.value);
+    if (!id) return;
+    itensFicha.push(id);
+    desenharItensFicha();
+  });
+
+  $('#ficha-itens').addEventListener('click', (e) => {
+    const botao = e.target.closest('[data-acao]');
+    if (!botao) return;
+    const i = Number(botao.dataset.i);
+    const acao = botao.dataset.acao;
+    if (acao === 'remover') {
+      itensFicha.splice(i, 1);
+      return desenharItensFicha();
+    }
+
+    const j = acao === 'subir' ? i - 1 : i + 1;
+    [itensFicha[i], itensFicha[j]] = [itensFicha[j], itensFicha[i]];
+    desenharItensFicha();
+    // Mantém o foco no mesmo botão, agora na nova posição, para mover várias vezes seguidas
+    const mesmo = $(`#ficha-itens [data-acao="${acao}"][data-i="${j}"]`);
+    if (!mesmo.disabled) mesmo.focus();
+  });
+
+  function cancelarEdicaoFicha() {
+    editandoFichaId = null;
+    itensFicha = [];
+    $('#form-ficha').reset();
+    $('#titulo-ficha').textContent = 'Nova ficha';
+    $('#salvar-ficha').textContent = 'Criar ficha';
+    $('#cancelar-ficha').hidden = true;
+    desenharItensFicha();
+  }
+
+  $('#cancelar-ficha').addEventListener('click', cancelarEdicaoFicha);
+
+  $('#lista-fichas').addEventListener('click', async (e) => {
+    const botao = e.target.closest('.editar, .apagar');
+    const ficha = botao && fichas.find((f) => String(f.id) === botao.dataset.id);
+    if (!ficha) return;
+
+    if (botao.classList.contains('editar')) {
+      editandoFichaId = ficha.id;
+      itensFicha = [...ficha.itens];
+      $('#ficha-nome').value = ficha.nome;
+      $('#ficha-descricao').value = ficha.descricao ?? '';
+      $('#titulo-ficha').textContent = 'Editar ficha';
+      $('#salvar-ficha').textContent = 'Salvar alterações';
+      $('#cancelar-ficha').hidden = false;
+      desenharItensFicha();
+      $('#form-ficha').scrollIntoView({ behavior: 'smooth' });
+      $('#ficha-nome').focus({ preventScroll: true });
+      return;
+    }
+
+    if (!confirm(`Excluir a ficha "${ficha.nome}"? Os treinos já registrados não são apagados.`)) return;
+    const { error } = await supabase.from('fichas').delete().eq('id', ficha.id);
+    if (error) return aviso(error.message, true);
+    if (editandoFichaId === ficha.id) cancelarEdicaoFicha();
+    aviso('Ficha excluída.');
+    carregarFichas();
+  });
+
+  // Grava a ficha e depois os exercícios. Os exercícios novos são gravados antes de remover
+  // os que saíram, assim uma falha no meio do caminho não deixa a ficha vazia.
+  async function salvarFicha(nome, descricao) {
+    const consulta = editandoFichaId !== null
+      ? supabase.from('fichas').update({ nome, descricao }).eq('id', editandoFichaId)
+      : supabase.from('fichas').insert({ nome, descricao });
+    const { data, error } = await consulta.select('id').single();
+    if (error) return error.code === '23505' ? 'Você já tem uma ficha com esse nome.' : error.message;
+    // Se algo falhar daqui em diante, salvar de novo atualiza esta ficha em vez de criar outra
+    editandoFichaId = data.id;
+
+    const linhas = itensFicha.map((exercicio_id, i) => ({ ficha_id: data.id, exercicio_id, ordem: i + 1 }));
+    const gravar = await supabase.from('ficha_exercicios').upsert(linhas, { onConflict: 'ficha_id,exercicio_id' });
+    if (gravar.error) return gravar.error.message;
+
+    const limpar = await supabase.from('ficha_exercicios').delete()
+      .eq('ficha_id', data.id)
+      .not('exercicio_id', 'in', `(${itensFicha.join(',')})`);
+    return limpar.error?.message ?? null;
+  }
+
+  $('#form-ficha').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const nome = $('#ficha-nome').value.trim();
+    const descricao = $('#ficha-descricao').value.trim() || null;
+    if (!nome) return;
+    if (!itensFicha.length) return aviso('Adicione pelo menos um exercício à ficha.', true);
+
+    const nova = editandoFichaId === null;
+    const botao = e.submitter;
+    botao.disabled = true;
+    const erro = await salvarFicha(nome, descricao);
+    botao.disabled = false;
+    if (erro) {
+      aviso(erro, true);
+      return carregarFichas();
+    }
+    cancelarEdicaoFicha();
+    await carregarFichas();
+    aviso(nova ? 'Ficha criada.' : 'Ficha atualizada.');
+  });
+
+  // ---------- registrar pela ficha ----------
+  let feitos = new Set();     // exercícios da ficha já registrados na data escolhida
+  let passoAtual = null;      // exercício da ficha que está sendo registrado
+
+  const fichaSelecionada = () => fichas.find((f) => String(f.id) === $('#ficha').value);
+  // Ficha sem exercícios se comporta como registro avulso
+  const modoFicha = () => Boolean(fichaSelecionada()?.itens.length);
+
+  async function atualizarRoteiro() {
+    const ficha = fichaSelecionada();
+    const ids = ficha?.itens ?? [];
+    $('#roteiro').hidden = !ficha;
+    $('#campos-avulso').hidden = $('#campos-avulso').disabled = ids.length > 0;
+    feitos = new Set();
+    if (!ids.length) {
+      passoAtual = null;
+      return desenharRoteiro();
+    }
+
+    const dia = $('#data').value;
+    if (dia) {
+      const { data, error } = await supabase
+        .from('registros')
+        .select('exercicio_id')
+        .eq('data', dia)
+        .in('exercicio_id', ids);
+      if (error) return aviso(error.message, true);
+      // A ficha ou a data mudou enquanto a consulta rodava
+      if (fichaSelecionada() !== ficha || $('#data').value !== dia) return;
+      feitos = new Set(data.map((r) => r.exercicio_id));
+    }
+
+    if (ids.includes(passoAtual)) desenharRoteiro();
+    else selecionarPasso(ids.find((id) => !feitos.has(id)) ?? ids[0]);
+  }
+
+  function desenharRoteiro() {
+    const ficha = fichaSelecionada();
+    if (!ficha) return;
+    if (!ficha.itens.length) {
+      $('#progresso').textContent = '';
+      $('#roteiro-lista').innerHTML = '<li class="vazio">Esta ficha não tem exercícios. Edite-a na aba Fichas.</li>';
+      return;
+    }
+
+    const dia = $('#data').value;
+    const qtdFeitos = ficha.itens.filter((id) => feitos.has(id)).length;
+    $('#progresso').textContent = `${qtdFeitos} de ${ficha.itens.length} feitos` + (dia ? ` em ${fmtData(dia)}` : '');
+    $('#roteiro-lista').innerHTML = ficha.itens.map((id, i) => {
+      const ex = exercicioPorId(id);
+      const feito = feitos.has(id);
+      return `
+        <li class="${feito ? 'feito' : ''}">
+          <button type="button" data-id="${id}" ${id === passoAtual ? 'aria-current="step"' : ''}>
+            <span class="marca" aria-hidden="true">${feito ? '✓' : i + 1}</span>
+            <span>
+              <strong>${esc(ex?.nome ?? '—')}</strong>
+              <small>${esc(nomeGrupo(ex?.grupo_muscular_id) ?? '')}${feito ? ' · feito' : ''}</small>
+            </span>
+          </button>
+        </li>`;
+    }).join('');
+  }
+
+  function selecionarPasso(id) {
+    passoAtual = id;
+    // Sincroniza os campos avulsos, para que voltar a "Exercício avulso" mostre o mesmo exercício
+    $('#grupo').value = exercicioPorId(id)?.grupo_muscular_id ?? '';
+    preencherExerciciosDoGrupo();
+    $('#exercicio').value = id;
+    mostrarUltimo(id);
+    desenharRoteiro();
+  }
+
+  // Próximo exercício não feito depois do atual; se não houver, volta ao início da ficha
+  function proximoPendente(atual) {
+    const ids = fichaSelecionada()?.itens ?? [];
+    const i = ids.indexOf(atual);
+    return [...ids.slice(i + 1), ...ids.slice(0, i)].find((id) => !feitos.has(id));
+  }
+
+  $('#ficha').addEventListener('change', () => {
+    passoAtual = null;
+    atualizarRoteiro();
+  });
+
+  $('#data').addEventListener('change', atualizarRoteiro);
+
+  $('#roteiro-lista').addEventListener('click', (e) => {
+    const botao = e.target.closest('button[data-id]');
+    if (botao) selecionarPasso(Number(botao.dataset.id));
   });
 
   // ---------- histórico ----------
