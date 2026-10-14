@@ -133,6 +133,10 @@
       <form id="form-registro" class="card">
         <h2>Novo registro</h2>
         <div class="campo">
+          <label for="grupo">Grupo muscular</label>
+          <select id="grupo" required></select>
+        </div>
+        <div class="campo">
           <label for="exercicio">Exercício</label>
           <select id="exercicio" required></select>
         </div>
@@ -189,13 +193,8 @@
           <input id="novo-nome" type="text" maxlength="80" placeholder="Ex.: Supino reto" required>
         </div>
         <div class="campo">
-          <label for="novo-grupo">Grupo muscular (opcional)</label>
-          <input id="novo-grupo" type="text" list="grupos" placeholder="Ex.: Peito">
-          <datalist id="grupos">
-            <option>Peito</option><option>Costas</option><option>Pernas</option>
-            <option>Ombros</option><option>Bíceps</option><option>Tríceps</option>
-            <option>Abdômen</option><option>Glúteos</option><option>Panturrilha</option>
-          </datalist>
+          <label for="novo-grupo">Grupo muscular</label>
+          <select id="novo-grupo" required></select>
         </div>
         <div class="linha">
           <button id="cancelar-edicao" class="secundario" type="button" hidden>Cancelar</button>
@@ -247,6 +246,8 @@
   const fmtNum = (n) => Number(n).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
   const fmtKg = (n) => fmtNum(n) + ' kg';
   const fmtSerie = (s) => `${fmtKg(s.carga)} × ${s.repeticoes}`;
+  // Ordem alfabética em português (acentos e maiúsculas não bagunçam a ordem)
+  const porNome = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR');
 
   let timerAviso;
   function aviso(msg, erro = false) {
@@ -302,8 +303,8 @@
     $('#data').value = hoje();
     cancelarEdicao();
     abrirAba('registrar');
+    await carregarGrupos();
     await carregarExercicios();
-    mostrarUltimo(Number($('#exercicio').value));
   }
 
   // ---------- abas ----------
@@ -318,6 +319,21 @@
     if (nome === 'evolucao') desenharEvolucao();
   }
 
+  // ---------- grupos musculares ----------
+  // Tabela fixa, cadastrada pelo SQL do README; o app só lê
+  let grupos = [];
+  const nomeGrupo = (id) => grupos.find((g) => g.id === id)?.nome;
+
+  async function carregarGrupos() {
+    const { data, error } = await supabase.from('grupos_musculares').select('id, nome');
+    if (error) return aviso(error.message, true);
+    grupos = data.sort(porNome);
+
+    const opcoes = grupos.map((g) => `<option value="${g.id}">${esc(g.nome)}</option>`).join('');
+    $('#grupo').innerHTML = '<option value="">Selecione o grupo muscular</option>' + opcoes;
+    $('#novo-grupo').innerHTML = '<option value="">Selecione o grupo muscular</option>' + opcoes;
+  }
+
   // ---------- exercícios ----------
   let exercicios = [];
   let editandoId = null;
@@ -325,34 +341,30 @@
   async function carregarExercicios() {
     const { data, error } = await supabase
       .from('exercicios')
-      .select('id, nome, grupo_muscular')
-      .order('nome');
+      .select('id, nome, grupo_muscular_id');
     if (error) return aviso(error.message, true);
-    exercicios = data;
+    exercicios = data.sort(porNome);
 
-    const opcoes = data.map((e) =>
-      `<option value="${e.id}">${esc(e.nome)}${e.grupo_muscular ? ' · ' + esc(e.grupo_muscular) : ''}</option>`
-    ).join('');
-    // Recria as opções mantendo o exercício que já estava selecionado
-    for (const [seletor, vazio] of [
-      ['#exercicio', 'Cadastre um exercício na aba Exercícios'],
-      ['#evo-exercicio', 'Nenhum exercício cadastrado'],
-    ]) {
-      const select = $(seletor);
-      const anterior = select.value;
-      select.innerHTML = opcoes || `<option value="">${vazio}</option>`;
-      if (data.some((e) => String(e.id) === anterior)) select.value = anterior;
-    }
+    preencherExerciciosDoGrupo();
 
-    $('#lista-exercicios').innerHTML = data.length ? `
+    // Evolução lista todos os exercícios, mantendo o que já estava selecionado
+    const evo = $('#evo-exercicio');
+    const anterior = evo.value;
+    evo.innerHTML = exercicios.map((e) => {
+      const grupo = nomeGrupo(e.grupo_muscular_id);
+      return `<option value="${e.id}">${esc(e.nome)}${grupo ? ' · ' + esc(grupo) : ''}</option>`;
+    }).join('') || '<option value="">Nenhum exercício cadastrado</option>';
+    if (exercicios.some((e) => String(e.id) === anterior)) evo.value = anterior;
+
+    $('#lista-exercicios').innerHTML = exercicios.length ? `
       <div class="card lista">
-        <h2>Cadastrados (${data.length})</h2>
+        <h2>Cadastrados (${exercicios.length})</h2>
         <ul>
-          ${data.map((e) => `
+          ${exercicios.map((e) => `
             <li>
               <div>
                 <strong>${esc(e.nome)}</strong>
-                ${e.grupo_muscular ? `<span>${esc(e.grupo_muscular)}</span>` : ''}
+                <span>${esc(nomeGrupo(e.grupo_muscular_id) ?? 'Sem grupo muscular — edite para escolher')}</span>
               </div>
               <button class="editar" data-id="${e.id}" aria-label="Editar ${esc(e.nome)}">✎</button>
             </li>`).join('')}
@@ -360,6 +372,26 @@
       </div>`
       : '<div class="card"><p class="vazio">Nenhum exercício cadastrado ainda.</p></div>';
   }
+
+  // No Registrar, o exercício só lista os do grupo escolhido, mantendo o que já estava selecionado
+  function preencherExerciciosDoGrupo() {
+    const select = $('#exercicio');
+    const anterior = select.value;
+    const grupoId = Number($('#grupo').value);
+    const doGrupo = exercicios.filter((e) => e.grupo_muscular_id === grupoId);
+
+    select.disabled = !grupoId;
+    select.innerHTML = !grupoId
+      ? '<option value="">Selecione o grupo muscular primeiro</option>'
+      : doGrupo.length
+        ? '<option value="">Selecione o exercício</option>' +
+          doGrupo.map((e) => `<option value="${e.id}">${esc(e.nome)}</option>`).join('')
+        : '<option value="">Nenhum exercício neste grupo — cadastre na aba Exercícios</option>';
+    if (doGrupo.some((e) => String(e.id) === anterior)) select.value = anterior;
+    if (select.value !== anterior) mostrarUltimo(Number(select.value));
+  }
+
+  $('#grupo').addEventListener('change', preencherExerciciosDoGrupo);
 
   function cancelarEdicao() {
     editandoId = null;
@@ -378,7 +410,7 @@
 
     editandoId = exercicio.id;
     $('#novo-nome').value = exercicio.nome;
-    $('#novo-grupo').value = exercicio.grupo_muscular ?? '';
+    $('#novo-grupo').value = exercicio.grupo_muscular_id ?? '';
     $('#titulo-exercicio').textContent = 'Editar exercício';
     $('#salvar-exercicio').textContent = 'Salvar alterações';
     $('#cancelar-edicao').hidden = false;
@@ -389,13 +421,14 @@
   $('#form-exercicio').addEventListener('submit', async (e) => {
     e.preventDefault();
     const nome = $('#novo-nome').value.trim();
-    const grupo_muscular = $('#novo-grupo').value.trim() || null;
+    const grupo_muscular_id = Number($('#novo-grupo').value);
     if (!nome) return;
+    if (!grupo_muscular_id) return aviso('Escolha o grupo muscular.', true);
 
     const editando = editandoId !== null;
     const consulta = editando
-      ? supabase.from('exercicios').update({ nome, grupo_muscular }).eq('id', editandoId)
-      : supabase.from('exercicios').insert({ nome, grupo_muscular });
+      ? supabase.from('exercicios').update({ nome, grupo_muscular_id }).eq('id', editandoId)
+      : supabase.from('exercicios').insert({ nome, grupo_muscular_id });
     const { data, error } = await consulta.select().single();
     if (error) {
       return aviso(error.code === '23505' ? 'Você já tem um exercício com esse nome.' : error.message, true);
@@ -404,6 +437,9 @@
     await carregarExercicios();
     if (editando) return aviso('Exercício atualizado.');
 
+    // Deixa o novo exercício pronto para registrar
+    $('#grupo').value = data.grupo_muscular_id;
+    preencherExerciciosDoGrupo();
     $('#exercicio').value = data.id;
     mostrarUltimo(data.id);
     aviso('Exercício adicionado.');
@@ -466,7 +502,7 @@
   async function mostrarUltimo(exercicioId) {
     const alvo = $('#ultimo');
     alvo.textContent = '';
-    if (!exercicioId) return;
+    if (!exercicioId) return preencherSeries(SERIES_PADRAO);
 
     const { data } = await supabase
       .from('registros')
@@ -496,7 +532,7 @@
       series: lerSeries(),
       observacao: $('#observacao').value.trim() || null,
     };
-    if (!registro.exercicio_id) return aviso('Cadastre e escolha um exercício primeiro.', true);
+    if (!registro.exercicio_id) return aviso('Escolha o grupo muscular e o exercício primeiro.', true);
 
     const botao = e.submitter;
     botao.disabled = true;
