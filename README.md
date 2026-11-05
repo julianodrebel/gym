@@ -12,7 +12,7 @@ The whole app is a single `index.html` file: no build step, no bundler, no serve
 - **Custom exercises** — in the *Exercícios* tab, add your own exercises (each one belongs to a muscle group), see the full list and edit the name or muscle group. The muscle groups are a fixed list stored in the database, with no screen to manage them.
 - **History** — your latest 150 entries grouped by day, with the option to delete an entry.
 - **Progress** — per-exercise chart with one line per set (switch between weight and reps), a list of what changed in each set from one session to the next (e.g. set 2 went from 18 to 20 kg, set 3 from 11 to 12 reps), and a summary of your personal record, best estimated one-rep max (Epley formula), change since the first entry and number of sessions.
-- **Light and dark mode** — follows your system preference.
+- **Layout** — dark theme built for the gym floor: bottom tab bar on phones (*Treinar*, *Histórico*, *Evolução*, *Fichas*, with *Exercícios* inside *Fichas*), large inputs for weight and reps, a check to mark each set as done, and a bottom sheet to pick a plan or a single exercise. On screens 960 px and wider, the tabs move to a sidebar and the logging screen shows the plan and the form side by side.
 
 > The user interface is in Brazilian Portuguese.
 
