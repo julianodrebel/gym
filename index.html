@@ -181,6 +181,21 @@
   .acao-fixa { position: sticky; bottom: calc(var(--altura-nav) + var(--seguro-baixo)); z-index: 5;
                margin: 0 -16px; padding: 12px 16px; background: var(--bg); border-top: 1px solid var(--borda-suave); }
 
+  /* Tela de ficha concluída (substitui o formulário quando todos os exercícios da ficha têm registro na data) */
+  .concluida { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 20px;
+               padding: 28px 20px 20px; text-align: center; }
+  .concluida .selo { width: 72px; height: 72px; border-radius: 36px; display: grid; place-items: center; margin-bottom: 8px;
+                     background: var(--ok-fundo); color: var(--ok); }
+  .concluida .sobretitulo { color: var(--ok); }
+  .concluida h1 { font-family: var(--fonte-titulo); font-size: 34px; font-weight: 700; line-height: 1.02; }
+  .concluida p { color: var(--texto-2); max-width: 36ch; }
+  .concluida p strong { color: var(--texto); font-weight: 600; }
+  .concluida .resumo { width: 100%; margin: 12px 0 8px; text-align: left; }
+  .concluida .stat { background: var(--bg); border-color: transparent; }
+  .concluida .stat:last-child { grid-column: 1 / -1; }
+  .concluida-acoes { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+  .concluida-acoes .botao { min-height: 56px; border-radius: var(--raio); }
+
   /* ---------- sheets (dialog) ---------- */
   dialog.sheet { width: 100%; max-width: 640px; max-height: calc(100dvh - 48px); margin: auto auto 0; padding: 0;
                  border: 0; border-top: 1px solid var(--borda); border-radius: 28px 28px 0 0;
@@ -342,6 +357,11 @@
     .registro { padding: 20px; background: var(--superficie); border: 1px solid var(--borda); border-radius: 20px; }
     .acao-fixa { position: static; margin: 0; padding: 0; border: 0; background: none; }
     #observacao { background: var(--bg); }
+    .concluida { margin-top: 0; padding: 40px 32px 32px; }
+    .concluida .resumo { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .concluida .stat:last-child { grid-column: auto; }
+    .concluida-acoes { flex-direction: row; }
+    .concluida-acoes .botao { flex: 1; }
     .lista-ampla { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; align-items: start; }
     .lista-ampla .ficha-card, .lista-ampla .grupo-ex { margin: 0; }
     .resumo { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -480,6 +500,20 @@
               <button id="salvar-registro" class="botao primario grande">Salvar registro</button>
             </div>
           </form>
+
+          <section id="ficha-concluida" class="concluida cartao" aria-labelledby="concluida-titulo" hidden>
+            <div class="selo" aria-hidden="true">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>
+            </div>
+            <span id="concluida-quando" class="sobretitulo"></span>
+            <h1 id="concluida-titulo" tabindex="-1">Treino concluído!</h1>
+            <p id="concluida-texto"></p>
+            <div id="concluida-resumo" class="resumo"></div>
+            <div class="concluida-acoes">
+              <button class="botao primario grande" type="button" data-aba="historico">Ver histórico</button>
+              <button class="botao" type="button" data-abrir-seletor>Escolher outro treino</button>
+            </div>
+          </section>
         </div>
       </section>
 
@@ -1113,12 +1147,16 @@
       return mostrarUltimo(registro.exercicio_id);
     }
 
-    // Pela ficha: marca como feito e passa para o próximo pendente
+    // Pela ficha: marca como feito e passa para o próximo pendente; sem pendentes, mostra a conclusão
     feitos.add(registro.exercicio_id);
+    registrosDia.push({ exercicio_id: registro.exercicio_id, series: registro.series });
     const proximo = proximoPendente(registro.exercicio_id);
-    aviso(proximo ? 'Treino registrado!' : 'Ficha concluída!');
-    if (proximo) selecionarPasso(proximo);
-    else { desenharRoteiro(); mostrarUltimo(registro.exercicio_id); }
+    if (proximo) {
+      aviso('Treino registrado!');
+      selecionarPasso(proximo);
+    } else {
+      mostrarConclusao(true);
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 
@@ -1422,11 +1460,14 @@
 
   // ---------- registrar pela ficha ----------
   let feitos = new Set();     // exercícios da ficha já registrados na data escolhida
-  let passoAtual = null;      // exercício da ficha que está sendo registrado
+  let passoAtual = null;      // exercício da ficha que está sendo registrado (null na tela de conclusão)
+  let registrosDia = [];      // registros desses exercícios na data, para o resumo da conclusão
 
   const fichaSelecionada = () => fichas.find((f) => String(f.id) === $('#ficha').value);
   // Ficha sem exercícios se comporta como registro avulso
   const modoFicha = () => Boolean(fichaSelecionada()?.itens.length);
+  // Todos os exercícios da ficha já têm registro na data escolhida
+  const fichaConcluida = () => modoFicha() && fichaSelecionada().itens.every((id) => feitos.has(id));
 
   async function atualizarRoteiro() {
     const ficha = fichaSelecionada();
@@ -1434,8 +1475,10 @@
     $('#roteiro').hidden = !ficha;
     $('#campos-avulso').disabled = ids.length > 0;
     feitos = new Set();
+    registrosDia = [];
     if (!ids.length) {
       passoAtual = null;
+      alternarConclusao(false);
       // Ficha vazia: não há exercício pronto para registrar
       if (ficha) desenharAtual(null);
       return desenharRoteiro();
@@ -1445,17 +1488,46 @@
     if (dia) {
       const { data, error } = await supabase
         .from('registros')
-        .select('exercicio_id')
+        .select('exercicio_id, series')
         .eq('data', dia)
         .in('exercicio_id', ids);
       if (error) return aviso(error.message, true);
       // A ficha ou a data mudou enquanto a consulta rodava
       if (fichaSelecionada() !== ficha || $('#data').value !== dia) return;
       feitos = new Set(data.map((r) => r.exercicio_id));
+      registrosDia = data;
     }
 
+    // Mantém o exercício escolhido; senão, ficha já feita na data abre a conclusão
     if (ids.includes(passoAtual)) desenharRoteiro();
+    else if (fichaConcluida()) mostrarConclusao();
     else selecionarPasso(ids.find((id) => !feitos.has(id)) ?? ids[0]);
+  }
+
+  // Troca o formulário pela tela de ficha concluída (e vice-versa)
+  function alternarConclusao(mostrar) {
+    $('#ficha-concluida').hidden = !mostrar;
+    $('#form-registro').hidden = mostrar;
+  }
+
+  // Parabeniza e resume o treino: exercícios, séries e volume (carga × repetições) do dia
+  function mostrarConclusao(focar = false) {
+    const ficha = fichaSelecionada();
+    const dia = $('#data').value;
+    const qtd = ficha.itens.length;
+    const series = registrosDia.flatMap((r) => r.series ?? []);
+    const volume = series.reduce((soma, s) => soma + Number(s.carga) * Number(s.repeticoes), 0);
+    passoAtual = null;
+    desenharRoteiro();
+    $('#concluida-quando').textContent = dia === hoje() ? 'Hoje' : fmtDia(dia);
+    $('#concluida-texto').innerHTML = `Mandou bem! Você fez ${qtd === 1 ? 'o exercício' : `os ${qtd} exercícios`} da ficha <strong>${esc(ficha.nome)}</strong>.`;
+    $('#concluida-resumo').innerHTML = `
+      <div class="cartao stat"><span>Exercícios</span><b>${qtd}</b></div>
+      <div class="cartao stat"><span>Séries</span><b>${series.length}</b></div>
+      <div class="cartao stat"><span>Volume total</span><b>${fmtNum(volume)} <small>kg</small></b></div>`;
+    alternarConclusao(true);
+    // Leva o foco para o título, para leitores de tela anunciarem a conclusão
+    if (focar) $('#concluida-titulo').focus({ preventScroll: true });
   }
 
   function desenharRoteiro() {
@@ -1500,6 +1572,7 @@
 
   function selecionarPasso(id) {
     passoAtual = id;
+    alternarConclusao(false);
     // Sincroniza os campos avulsos, para que voltar a "Exercício avulso" mostre o mesmo exercício
     $('#grupo').value = exercicioPorId(id)?.grupo_muscular_id ?? '';
     preencherExerciciosDoGrupo();
