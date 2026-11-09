@@ -8,9 +8,9 @@ The whole app is a single `index.html` file: no build step, no bundler, no serve
 
 - **Accounts** — sign up and sign in with email and password (Supabase Auth). Each user only sees their own data.
 - **Log workouts** — pick a muscle group, then one of its exercises (listed alphabetically) and the date, then enter each set with its own weight (kg) and reps; add or remove sets as needed, plus an optional note. The form is pre-filled with the sets from your last entry for that exercise.
-- **Workout plans** — in the *Fichas* tab, create plans such as *Treino A (Push)*: give it a name and an optional description, add exercises (pick a muscle group, then the exercise) and put them in order with the ↑ / ↓ buttons. In the *Registrar* tab, choose a plan to log it exercise by exercise: the list shows which ones you've already logged on the selected date (✓), and saving moves on to the next pending one. You can tap any exercise to skip ahead or go back, or pick *Exercício avulso* to log a single exercise as before.
+- **Workout plans** — in the *Fichas* tab, create plans such as *Treino A (Push)*: give it a name and an optional description, add exercises (pick a muscle group, then the exercise) and put them in order with the ↑ / ↓ buttons. In the *Registrar* tab, choose a plan to log it exercise by exercise: the list shows which ones you've already logged on the selected date (✓), and saving moves on to the next pending one. You can tap any exercise to skip ahead or go back, or pick *Exercício avulso* to log a single exercise as before. Entries logged from a plan are linked to it, and a plan that already has entries can't be deleted.
 - **Custom exercises** — in the *Exercícios* tab, add your own exercises (each one belongs to a muscle group), see the full list and edit the name or muscle group. The muscle groups are a fixed list stored in the database, with no screen to manage them.
-- **History** — your latest 150 entries grouped by day, with the option to delete an entry.
+- **History** — your latest 150 entries grouped by day, showing which plan was done each day (e.g. *Treino A*, or *Treino A + Avulso* when single exercises were also logged), with the option to delete an entry.
 - **Progress** — per-exercise chart with one line per set (switch between weight and reps), a list of what changed in each set from one session to the next (e.g. set 2 went from 18 to 20 kg, set 3 from 11 to 12 reps), and a summary of your personal record, best estimated one-rep max (Epley formula), change since the first entry and number of sessions.
 - **Layout** — dark theme built for the gym floor: bottom tab bar on phones (*Treinar*, *Histórico*, *Evolução*, *Fichas*, with *Exercícios* inside *Fichas*), large inputs for weight and reps, a check to mark each set as done, and a bottom sheet to pick a plan or a single exercise. On screens 960 px and wider, the tabs move to a sidebar and the logging screen shows the plan and the form side by side.
 
@@ -56,16 +56,6 @@ create table public.exercicios (
   unique (user_id, nome)
 );
 
-create table public.registros (
-  id           bigint generated always as identity primary key,
-  user_id      uuid not null default auth.uid() references auth.users on delete cascade,
-  exercicio_id bigint not null references public.exercicios on delete cascade,
-  data         date not null default current_date,
-  series       jsonb not null check (jsonb_typeof(series) = 'array' and jsonb_array_length(series) > 0),
-  observacao   text,
-  created_at   timestamptz not null default now()
-);
-
 create table public.fichas (
   id         bigint generated always as identity primary key,
   user_id    uuid not null default auth.uid() references auth.users on delete cascade,
@@ -82,6 +72,20 @@ create table public.ficha_exercicios (
   primary key (ficha_id, exercicio_id)
 );
 
+create table public.registros (
+  id           bigint generated always as identity primary key,
+  user_id      uuid not null default auth.uid() references auth.users on delete cascade,
+  exercicio_id bigint not null references public.exercicios on delete cascade,
+  -- Plan this entry was logged from (null = single exercise). A plan with entries can't be deleted
+  ficha_id     bigint references public.fichas on delete restrict,
+  data         date not null default current_date,
+  series       jsonb not null check (jsonb_typeof(series) = 'array' and jsonb_array_length(series) > 0),
+  observacao   text,
+  created_at   timestamptz not null default now()
+);
+
+create index registros_ficha_id_idx on public.registros (ficha_id, data);
+
 alter table public.grupos_musculares enable row level security;
 alter table public.exercicios        enable row level security;
 alter table public.registros         enable row level security;
@@ -94,8 +98,15 @@ create policy "read muscle groups" on public.grupos_musculares
 create policy "own exercises" on public.exercicios
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- An entry can only be linked to one of the user's own plans
 create policy "own entries" on public.registros
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  for all
+  using (auth.uid() = user_id)
+  with check (
+    auth.uid() = user_id
+    and (ficha_id is null
+         or exists (select 1 from public.fichas f where f.id = ficha_id and f.user_id = auth.uid()))
+  );
 
 create policy "own plans" on public.fichas
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
@@ -114,7 +125,7 @@ create policy "own plan exercises" on public.ficha_exercicios
 | --- | --- |
 | `grupos_musculares` | Muscle groups (`nome` = name). Filled in by the script above; to add or rename one, edit the table in Supabase |
 | `exercicios` | Exercises (`nome` = name, `grupo_muscular_id` = its muscle group) |
-| `registros` | Workout entries (`data` = date, `observacao` = note). `series` holds the sets in order, each with its own weight in kg and reps: `[{"carga": 14, "repeticoes": 15}, {"carga": 18, "repeticoes": 12}]` |
+| `registros` | Workout entries (`data` = date, `observacao` = note, `ficha_id` = the plan it was logged from, or empty for a single exercise). `series` holds the sets in order, each with its own weight in kg and reps: `[{"carga": 14, "repeticoes": 15}, {"carga": 18, "repeticoes": 12}]` |
 | `fichas` | Workout plans (`nome` = name, `descricao` = optional description) |
 | `ficha_exercicios` | The exercises in each plan, in order (`ordem` = position, starting at 1). An exercise appears at most once per plan |
 
@@ -226,6 +237,39 @@ create policy "own plan exercises" on public.ficha_exercicios
   with check (
     exists (select 1 from public.fichas f where f.id = ficha_id and f.user_id = auth.uid())
     and exists (select 1 from public.exercicios e where e.id = exercicio_id and e.user_id = auth.uid())
+  );
+
+commit;
+```
+
+**Entries linked to plans.** Adds `registros.ficha_id`, so each entry logged from a plan points to that plan (for history and future reports, such as how many times and on which days a plan was done). Existing entries keep `ficha_id` empty and are shown as single exercises. A plan that already has entries can no longer be deleted. Run this after the *Workout plans* upgrade:
+
+```sql
+begin;
+
+alter table public.registros
+  add column if not exists ficha_id bigint references public.fichas on delete restrict;
+
+create index if not exists registros_ficha_id_idx on public.registros (ficha_id, data);
+
+-- Replaces whatever policies registros has (their names may differ from this README),
+-- so no older policy keeps allowing entries linked to another user's plan
+do $$
+declare p record;
+begin
+  for p in select policyname from pg_policies where schemaname = 'public' and tablename = 'registros' loop
+    execute format('drop policy %I on public.registros', p.policyname);
+  end loop;
+end $$;
+
+-- An entry can only be linked to one of the user's own plans
+create policy "own entries" on public.registros
+  for all
+  using (auth.uid() = user_id)
+  with check (
+    auth.uid() = user_id
+    and (ficha_id is null
+         or exists (select 1 from public.fichas f where f.id = ficha_id and f.user_id = auth.uid()))
   );
 
 commit;

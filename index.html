@@ -235,7 +235,10 @@
   .semana .futuro .dia-n { background: transparent; border: 1px dashed #2F343B; color: var(--apagado); }
 
   .dia { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
-  .dia-topo { display: flex; justify-content: space-between; align-items: baseline; padding: 0 4px; font-size: 13px; color: var(--suave); }
+  .dia-topo { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 0 4px; font-size: 13px; color: var(--suave); }
+  .dia-titulo { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .dia-ficha { font-family: var(--fonte-titulo); font-size: 22px; font-weight: 700; line-height: 1.1; color: var(--texto); overflow-wrap: anywhere; }
+  .dia-topo > span { flex: none; }
   .registros { list-style: none; margin: 0; padding: 0; overflow: hidden; }
   .registros li { display: flex; align-items: center; gap: 8px; padding: 12px 6px 12px 14px; }
   .registros li + li { border-top: 1px solid var(--borda-suave); }
@@ -1089,6 +1092,8 @@
     e.preventDefault();
     const registro = {
       exercicio_id: modoFicha() ? passoAtual : Number($('#exercicio').value),
+      // Liga o registro à ficha executada (avulso fica sem ficha)
+      ficha_id: modoFicha() ? fichaSelecionada().id : null,
       data: $('#data').value,
       series: lerSeries(),
       observacao: $('#observacao').value.trim() || null,
@@ -1363,8 +1368,10 @@
       return;
     }
 
-    if (!confirm(`Excluir a ficha "${ficha.nome}"? Os treinos já registrados não são apagados.`)) return;
+    if (!confirm(`Excluir a ficha "${ficha.nome}"?`)) return;
     const { error } = await supabase.from('fichas').delete().eq('id', ficha.id);
+    // 23503: o banco bloqueia a exclusão de fichas que já têm treinos registrados (on delete restrict)
+    if (error?.code === '23503') return aviso('Não foi possível excluir: esta ficha já tem treinos registrados.', true);
     if (error) return aviso(error.message, true);
     if (editandoFichaId === ficha.id) cancelarEdicaoFicha();
     aviso('Ficha excluída.');
@@ -1555,11 +1562,19 @@
       </div>`;
   }
 
+  // Fichas executadas no dia, na ordem em que foram feitas ("Treino A + Avulso").
+  // Dia só com exercícios avulsos não mostra nada.
+  function fichasDoDia(itens) {
+    const nomes = [...new Set([...itens].reverse().map((r) => r.fichas?.nome ?? 'Avulso'))];
+    if (nomes.length === 1 && nomes[0] === 'Avulso') return '';
+    return `<p class="dia-ficha">${esc(nomes.join(' + '))}</p>`;
+  }
+
   async function carregarHistorico() {
     const lista = $('#lista-historico');
     const { data, error } = await supabase
       .from('registros')
-      .select('id, data, series, observacao, exercicios(nome)')
+      .select('id, data, series, observacao, exercicios(nome), fichas(nome)')
       .order('data', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(150);
@@ -1581,7 +1596,10 @@
     lista.innerHTML = resumoSemana(new Set(porDia.keys())) + [...porDia].map(([dia, itens]) => `
       <section class="dia">
         <div class="dia-topo">
-          <h2 class="sobretitulo">${dia === iso ? 'Hoje · ' : dia === ontem ? 'Ontem · ' : ''}${fmtDia(dia)}</h2>
+          <div class="dia-titulo">
+            <h2 class="sobretitulo">${dia === iso ? 'Hoje · ' : dia === ontem ? 'Ontem · ' : ''}${fmtDia(dia)}</h2>
+            ${fichasDoDia(itens)}
+          </div>
           <span>${itens.length} ${itens.length === 1 ? 'exercício' : 'exercícios'}</span>
         </div>
         <ul class="registros cartao">
